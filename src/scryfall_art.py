@@ -8,9 +8,6 @@ def download_art_crops(json_filepath):
     """
     Reads a JSON file, downloads art_crop images from Scryfall,
     and saves them to a folder structure.
-
-    Args:
-        json_filepath (str): Path to the JSON file containing card data.
     """
 
     with open(json_filepath, 'r', encoding='utf-8') as f:
@@ -50,8 +47,18 @@ def download_art_crops(json_filepath):
                 print(f"Error downloading {card_name}: {e}")
 
             time.sleep(0.2) # 200 milliseconds delay
+
+            # Save card data to JSON file
+            json_filename = f"{card_name}.json" # {{ edit_1 }}
+            json_filepath = os.path.join(set_folder, json_filename) # {{ edit_1 }}
+            with open(json_filepath, 'w', encoding='utf-8') as json_file: # {{ edit_1 }}
+                json.dump(card, json_file, indent=4) # {{ edit_1 }}
+            print(f"Card data saved to {json_filepath}") # {{ edit_1 }}
+
+
         else:
             print(f"No art_crop URL found for {card.get('name', 'unknown_card')}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download art crops from Scryfall JSON data.") # {{ edit_2 }}
