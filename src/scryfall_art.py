@@ -13,7 +13,7 @@ def download_art_crops(json_filepath):
     with open(json_filepath, 'r', encoding='utf-8') as f:
         cards_data = json.load(f)
 
-    output_folder = "scryfall_images"
+    output_folder = ".local/scryfall_images"
     os.makedirs(output_folder, exist_ok=True)
 
     for card in cards_data:
