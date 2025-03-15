@@ -14,7 +14,7 @@ async def download_default_cards_json(bulk_data_name="Default Cards"):
             "Default Cards", or "All Cards".
     """
     bulk_data_url = "https://api.scryfall.com/bulk-data"
-    download_path = ".json"
+    download_path = ".local/json"
     file_name = f"{bulk_data_name.replace(' ', '-').lower()}.json" # Dynamically create the file name
     output_file_path = os.path.join(download_path, file_name)
 

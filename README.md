@@ -12,7 +12,7 @@ Downloads Scryfall bulk data JSON files and saves them to the `.json` folder.
 
 - Fetches the dynamic download URL for bulk data from the Scryfall API
 - Supports different bulk data types: "Default Cards", "Unique Artwork", or "All Cards"
-- Downloads the JSON data and saves it to the `.json` directory
+- Downloads the JSON data and saves it to the `.local/json` directory
 - Handles HTTP request errors and JSON decoding errors
 
 **Usage:**
@@ -48,7 +48,7 @@ Reads a JSON file of card data and downloads art crop images for each card, orga
 pip install httpx argparse
 
 # Run the script with your JSON file
-python src/scryfall_art.py .json/default-cards.json
+python src/scryfall_art.py .local/json/default-cards.json
 ```
 
 ### `scryfall_card_download.py`
@@ -83,7 +83,7 @@ python src/scryfall_card_download.py "Black Lotus" "Counterspell"
 
 ## Output
 
-- **`.json/`**: Contains downloaded bulk data JSON files
+- **`.local/json/`**: Contains downloaded bulk data JSON files
 - **`.local/scryfall_images/`**: Contains subfolders for each card set with art crop images and card data JSON files
 - **`.local/scryfall_card_images/`**: Contains high-resolution 'large' card images downloaded by name
 
