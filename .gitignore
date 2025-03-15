@@ -176,3 +176,4 @@ cython_debug/
 # Local files not to check in
 .json/
 scryfall_images
+.local/
