@@ -2,6 +2,7 @@ import json
 import httpx
 import os
 import time
+import argparse
 
 def download_art_crops(json_filepath):
     """
@@ -53,6 +54,9 @@ def download_art_crops(json_filepath):
             print(f"No art_crop URL found for {card.get('name', 'unknown_card')}")
 
 if __name__ == "__main__":
-    json_file = "unique-artwork-20250315090349.json" # Replace with your json file path
-    download_art_crops(json_file)
+    parser = argparse.ArgumentParser(description="Download art crops from Scryfall JSON data.") # {{ edit_2 }}
+    parser.add_argument("json_file", help="Path to the JSON file containing card data.") # {{ edit_3 }}
+    args = parser.parse_args() # {{ edit_4 }}
+
+    download_art_crops(args.json_file) # {{ edit_5 }}
     print("Download complete.")
