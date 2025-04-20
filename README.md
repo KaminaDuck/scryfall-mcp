@@ -39,7 +39,10 @@ Reads a JSON file of card data and downloads art crop images for each card, orga
 - Creates a folder structure `.local/scryfall_images/{set_name}` to organize images by set
 - Downloads and saves art crop images as `.local/scryfall_images/{set_name}/{card_name}.{extension}`
 - Also saves individual card data as JSON files alongside the images
+- **Skips downloading images that already exist** to save time and bandwidth
+- Provides progress tracking and a summary of downloaded/skipped images
 - Includes error handling and rate limiting (200ms delay between requests)
+- Supports a `--force` flag to re-download all images even if they already exist
 
 **Usage:**
 
@@ -49,6 +52,9 @@ pip install httpx argparse
 
 # Run the script with your JSON file
 python src/scryfall_art.py .local/json/default-cards.json
+
+# Force re-download of all images (even if they already exist)
+python src/scryfall_art.py .local/json/default-cards.json --force
 ```
 
 ### `scryfall_card_download.py`
@@ -61,7 +67,10 @@ Downloads high-resolution 'large' card images for specific cards by name.
 - Queries the Scryfall API for each card by exact name
 - Downloads the 'large' image for each card
 - Saves images to `.local/scryfall_card_images/` directory
+- **Skips downloading images that already exist** to save time and bandwidth
+- Provides progress tracking and a summary of downloaded/skipped images
 - Includes error handling and rate limiting
+- Supports a `--force` flag to re-download all images even if they already exist
 
 **Usage:**
 
@@ -71,6 +80,9 @@ pip install httpx
 
 # Download images for specific cards
 python src/scryfall_card_download.py "Black Lotus" "Counterspell"
+
+# Force re-download of all images (even if they already exist)
+python src/scryfall_card_download.py "Black Lotus" "Counterspell" --force
 ```
 
 ## Dependencies
