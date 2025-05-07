@@ -151,6 +151,37 @@ The `scryfall_card_download.py` script now checks the database before downloadin
 - Tracks additional metadata about downloaded cards
 - Provides a queryable interface to your card collection
 
+## Testing
+
+The project includes pytest-based tests to ensure functionality works as expected.
+
+### Running Tests Locally
+
+```bash
+# Install pytest and project dependencies
+pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run specific test file
+pytest src/test_db.py
+
+# Run with verbose output
+pytest -v
+```
+
+### Continuous Integration
+
+This project uses GitHub Actions to automatically run tests on push and pull requests. The workflow:
+
+1. Runs tests on multiple Python versions (3.8 to 3.12)
+2. Installs all dependencies
+3. Executes the pytest suite
+4. Uploads test results as artifacts
+
+The GitHub workflow configuration is located in `.github/workflows/pytest.yml`.
+
 ## License
 
 This project is licensed under the Apache-2.0 License. See the LICENSE file for more details.
