@@ -3,12 +3,14 @@ import os
 import time
 import argparse
 import json
+from db_manager import CardDatabase
 
 
 def download_card_images(card_names, force_download=False):
     """
     Downloads 'large' images for a list of card names from Scryfall.
     Tracks progress and provides a summary at the end.
+    Uses a database to track downloaded cards.
     """
     total_cards = len(card_names)
     downloaded_count = 0
@@ -20,52 +22,63 @@ def download_card_images(card_names, force_download=False):
     output_folder = ".local/scryfall_card_images"
     os.makedirs(output_folder, exist_ok=True)
     
-    for index, card_name in enumerate(card_names, 1):
-        card_name_for_filename = card_name.replace(" ", "_").replace("//", "_")
-        # Check if any image file with this card name exists (regardless of extension)
-        existing_files = [f for f in os.listdir(output_folder) if f.startswith(card_name_for_filename + ".")]
-        
-        if existing_files and not force_download:
-            print(f"[{index}/{total_cards}] Image for '{card_name}' already exists, skipping download...")
-            skipped_count += 1
-        else:
-            try:
-                card_name_for_url = card_name.replace(" ", "+")
-                api_url = f"https://api.scryfall.com/cards/named?exact={card_name_for_url}"
-                
-                print(f"[{index}/{total_cards}] Fetching data for '{card_name}' from Scryfall...")
-                with httpx.Client() as client:
-                    response = client.get(api_url)
-                    response.raise_for_status()
-                    card_data = response.json()
+    # Initialize the database
+    with CardDatabase() as db:
+        for index, card_name in enumerate(card_names, 1):
+            card_name_for_filename = card_name.replace(" ", "_").replace("//", "_")
+            
+            # Check if the card exists in the database
+            if db.card_exists(card_name) and not force_download:
+                print(f"[{index}/{total_cards}] Image for '{card_name}' already exists in database, skipping download...")
+                skipped_count += 1
+                continue  # Skip to the next card
+            else:
+                try:
+                    card_name_for_url = card_name.replace(" ", "+")
+                    api_url = f"https://api.scryfall.com/cards/named?exact={card_name_for_url}"
                     
-                    large_image_url = card_data.get("image_uris", {}).get("large")
-                    
-                    if large_image_url:
-                        image_extension = os.path.splitext(large_image_url)[1]
-                        if "?" in large_image_url:
-                            large_image_url_base = large_image_url.split("?")[0]
-                            image_extension = os.path.splitext(large_image_url_base)[1]
-                        image_filename = f"{card_name_for_filename}{image_extension}"
-                        image_filepath = os.path.join(output_folder, image_filename)
+                    print(f"[{index}/{total_cards}] Fetching data for '{card_name}' from Scryfall...")
+                    with httpx.Client() as client:
+                        response = client.get(api_url)
+                        response.raise_for_status()
+                        card_data = response.json()
                         
-                        print(f"[{index}/{total_cards}] Downloading large image for '{card_name}'...")
-                        image_response = client.get(large_image_url)
-                        image_response.raise_for_status()
+                        large_image_url = card_data.get("image_uris", {}).get("large")
                         
-                        with open(image_filepath, 'wb') as img_file:
-                            img_file.write(image_response.content)
-                        print(f"Saved to {image_filepath}")
-                        downloaded_count += 1
-                    else:
-                        print(f"[{index}/{total_cards}] No large image found for '{card_name}'.")
-                        error_count += 1
-            except httpx.HTTPError as e:
-                print(f"[{index}/{total_cards}] Error fetching data or downloading image for '{card_name}': {e}")
-                error_count += 1
-            except Exception as e:
-                print(f"[{index}/{total_cards}] Unexpected error for '{card_name}': {e}")
-                error_count += 1
+                        if large_image_url:
+                            image_extension = os.path.splitext(large_image_url)[1]
+                            if "?" in large_image_url:
+                                large_image_url_base = large_image_url.split("?")[0]
+                                image_extension = os.path.splitext(large_image_url_base)[1]
+                            image_filename = f"{card_name_for_filename}{image_extension}"
+                            image_filepath = os.path.join(output_folder, image_filename)
+                            
+                            print(f"[{index}/{total_cards}] Downloading large image for '{card_name}'...")
+                            image_response = client.get(large_image_url)
+                            image_response.raise_for_status()
+                            
+                            with open(image_filepath, 'wb') as img_file:
+                                img_file.write(image_response.content)
+                            print(f"Saved to {image_filepath}")
+                            
+                            # Add the card to the database
+                            db.add_card(
+                                card_name=card_name,
+                                filename=image_filename,
+                                card_id=card_data.get("id"),
+                                set_code=card_data.get("set"),
+                                image_url=large_image_url
+                            )
+                            downloaded_count += 1
+                        else:
+                            print(f"[{index}/{total_cards}] No large image found for '{card_name}'.")
+                            error_count += 1
+                except httpx.HTTPError as e:
+                    print(f"[{index}/{total_cards}] Error fetching data or downloading image for '{card_name}': {e}")
+                    error_count += 1
+                except Exception as e:
+                    print(f"[{index}/{total_cards}] Unexpected error for '{card_name}': {e}")
+                    error_count += 1
                 
         time.sleep(0.2)  # Delay of 200ms between requests
     

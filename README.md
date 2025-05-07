@@ -98,6 +98,58 @@ python src/scryfall_card_download.py "Black Lotus" "Counterspell" --force
 - **`.local/json/`**: Contains downloaded bulk data JSON files
 - **`.local/scryfall_images/`**: Contains subfolders for each card set with art crop images and card data JSON files
 - **`.local/scryfall_card_images/`**: Contains high-resolution 'large' card images downloaded by name
+- **`.local/scryfall_db.sqlite`**: SQLite database tracking downloaded cards
+
+## Database Functionality
+
+The project now includes a SQLite database to track downloaded cards, which helps prevent redundant downloads and provides a way to query your card collection.
+
+### Database Schema
+
+The database contains a single table `downloaded_cards` with the following columns:
+- `id`: Unique identifier for the record
+- `card_name`: Name of the card
+- `filename`: Filename where the card image is saved
+- `download_date`: Timestamp when the card was downloaded
+- `card_id`: Scryfall ID of the card (if available)
+- `set_code`: Set code of the card (if available)
+- `image_url`: URL of the downloaded image (if available)
+
+### Database Utilities
+
+The `db_utils.py` script provides command-line utilities for managing the database:
+
+```bash
+# Initialize the database (automatically done when needed)
+python src/db_utils.py init
+
+# List all downloaded cards
+python src/db_utils.py list
+
+# List with sorting options
+python src/db_utils.py list --sort name --order asc
+python src/db_utils.py list --sort date --order desc
+python src/db_utils.py list --sort set --order desc
+
+# Limit the number of results
+python src/db_utils.py list --limit 10
+
+# Search for cards
+python src/db_utils.py search "lotus"
+
+# Remove a card from the database
+python src/db_utils.py remove "Black Lotus"
+
+# Show database statistics
+python src/db_utils.py stats
+```
+
+### Integration with Card Download
+
+The `scryfall_card_download.py` script now checks the database before downloading cards, which provides several benefits:
+- Prevents redundant downloads even if files are moved or renamed
+- Tracks additional metadata about downloaded cards
+- Provides a queryable interface to your card collection
 
 ## License
 
