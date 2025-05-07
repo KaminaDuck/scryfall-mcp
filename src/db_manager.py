@@ -30,14 +30,52 @@ class CardDatabase:
         self.cursor.execute('''
         CREATE TABLE IF NOT EXISTS downloaded_cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            card_name TEXT NOT NULL UNIQUE,
+            card_name TEXT NOT NULL,
             filename TEXT NOT NULL,
             download_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             card_id TEXT,
             set_code TEXT,
-            image_url TEXT
+            image_url TEXT,
+            UNIQUE(card_name)
         )
         ''')
+        
+        # Check if we need to migrate the database to support multiple versions
+        self.cursor.execute("PRAGMA table_info(downloaded_cards)")
+        columns = self.cursor.fetchall()
+        has_unique_constraint = False
+        
+        for col in columns:
+            if col[1] == 'card_name' and col[5] == 1:  # Check if card_name has a unique constraint
+                has_unique_constraint = True
+                break
+        
+        if has_unique_constraint:
+            print("Migrating database to support multiple card versions...")
+            # Create a new table without the unique constraint
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS downloaded_cards_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_name TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                download_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                card_id TEXT,
+                set_code TEXT,
+                image_url TEXT
+            )
+            ''')
+            
+            # Copy data from old table to new table
+            self.cursor.execute('''
+            INSERT INTO downloaded_cards_new
+            SELECT * FROM downloaded_cards
+            ''')
+            
+            # Drop old table and rename new table
+            self.cursor.execute('DROP TABLE downloaded_cards')
+            self.cursor.execute('ALTER TABLE downloaded_cards_new RENAME TO downloaded_cards')
+            
+            print("Database migration completed.")
         self.conn.commit()
     
     def card_exists(self, card_name: str) -> bool:
@@ -45,13 +83,13 @@ class CardDatabase:
         Check if a card has already been downloaded.
         
         Args:
-            card_name: The name of the card to check
+            card_name: The name or version identifier of the card to check
             
         Returns:
             True if the card exists in the database, False otherwise
         """
         self.cursor.execute(
-            "SELECT 1 FROM downloaded_cards WHERE card_name = ?", 
+            "SELECT 1 FROM downloaded_cards WHERE card_name = ?",
             (card_name,)
         )
         return self.cursor.fetchone() is not None

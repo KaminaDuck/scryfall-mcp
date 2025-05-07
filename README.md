@@ -85,6 +85,33 @@ python src/scryfall_card_download.py "Black Lotus" "Counterspell"
 python src/scryfall_card_download.py "Black Lotus" "Counterspell" --force
 ```
 
+### `scryfall_search.py`
+
+Searches for cards by name on Scryfall and allows users to select and download specific versions, including alternate artworks.
+
+**Functionality:**
+
+- Takes a search term as input and queries the Scryfall API
+- Displays a list of all matching cards, highlighting alternate artworks as separate items
+- Shows detailed information for each card version (set name, set code, collector number)
+- Allows users to select a specific card version to download
+- Downloads the selected card using the `scryfall_card_download.py` script
+- Handles pagination for searches with many results
+- Provides information about the specific version downloaded (set code and collector number)
+
+**Usage:**
+
+```bash
+# Install dependencies
+pip install httpx
+
+# Search for cards with a specific term in their name
+python src/scryfall_search.py "lightning bolt"
+
+# Force re-download even if the card already exists in the database
+python src/scryfall_search.py "black lotus" --force
+```
+
 ## Dependencies
 
 - [httpx](https://www.python-httpx.org/): For making HTTP requests to the Scryfall API
