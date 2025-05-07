@@ -29,7 +29,7 @@ jobs:
         
     - name: Test with pytest
       run: |
-        pytest src/test_db.py -v
+        pytest src/test_db.py src/test_search.py -v
         
     - name: Upload test results
       if: always()
