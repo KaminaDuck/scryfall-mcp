@@ -1,6 +1,42 @@
 # Scryfall Card Art Downloader
 
-This project provides Python scripts to download card data and images from Scryfall.
+This project provides Python scripts to download card data and images from Scryfall, as well as an MCP server for integrating with AI assistants.
+
+## MCP Server
+
+The project includes an MCP (Model Context Protocol) server that allows AI assistants to interact with the Scryfall API. This enables you to search for cards, download high-resolution images, and specify which printing of a card to download directly through AI assistant tools.
+
+### Features
+
+- **Search Cards**: Search for Magic: The Gathering cards using the Scryfall API
+- **Download Cards**: Download high-resolution images of specific cards
+- **Get Card Artwork**: Retrieve artwork URLs for specific cards
+- **Card Resources**: Access detailed card information and random cards
+
+### Setup and Usage
+
+1. Install the MCP package:
+   ```bash
+   pip install "mcp[cli]"
+   # Or with uv (recommended)
+   uv add "mcp[cli]"
+   ```
+
+2. Start the MCP server:
+   ```bash
+   python src/mcp/scryfall_server.py
+   ```
+
+3. The server will run and provide the following tools and resources:
+   - Tools:
+     - `mcp_search_cards`: Search for cards with a query string
+     - `mcp_download_card`: Download a specific card, optionally specifying set code and collector number
+     - `mcp_get_card_artwork`: Get artwork URLs for a specific card by ID
+   - Resources:
+     - `resource://card/{card_id}`: Get detailed information about a specific card
+     - `resource://random_card`: Get a random card from Scryfall
+
+4. The MCP server is configured in `settings.json` and can be used with AI assistants that support the Model Context Protocol.
 
 ## Scripts
 
@@ -212,3 +248,34 @@ The GitHub workflow configuration is located in `.github/workflows/pytest.yml`.
 ## License
 
 This project is licensed under the Apache-2.0 License. See the LICENSE file for more details.
+
+## MCP Server Technical Details
+
+The MCP server is implemented using the FastMCP class from the MCP SDK. It provides a standardized way for AI assistants to interact with the Scryfall API.
+
+### Tool Schemas
+
+#### mcp_search_cards
+- **Input**: `query` (string) - The search query to use (e.g., "lightning bolt", "t:creature c:red")
+- **Output**: JSON object containing search results grouped by card name
+
+#### mcp_download_card
+- **Input**:
+  - `card_name` (string) - The name of the card to download
+  - `set_code` (string, optional) - Set code to specify a particular printing (e.g., "m10", "znr")
+  - `collector_number` (string, optional) - Collector number to specify a particular printing
+  - `force_download` (boolean, optional) - Whether to force download even if the card already exists
+- **Output**: JSON object containing information about the downloaded card
+
+#### mcp_get_card_artwork
+- **Input**: `card_id` (string) - The Scryfall ID of the card
+- **Output**: JSON object containing the artwork URLs for the card
+
+### Resource URIs
+
+- `resource://card/{card_id}`: Get detailed information about a specific card by its Scryfall ID
+- `resource://random_card`: Get a random card from Scryfall
+
+### Implementation
+
+The server is implemented in `src/mcp/scryfall_server.py` and leverages the existing functionality from the project's scripts. It uses the FastMCP class from the MCP SDK to provide a standardized interface for AI assistants.
