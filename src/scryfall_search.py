@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""
+Scryfall Search
+
+This module provides functionality to search for cards on Scryfall and download specific versions.
+It supports downloading both full card images and art crops.
+"""
+
 import httpx
 import argparse
 import json
@@ -6,6 +14,7 @@ import sys
 import time
 from typing import List, Dict, Any, Optional
 from scryfall_card_download import download_card_images
+from scryfall_art_download import download_art_crops
 
 
 def search_cards(search_term: str) -> List[Dict[str, Any]]:
@@ -199,6 +208,8 @@ def main():
     parser.add_argument("search_term", help="Term to search for in card names")
     parser.add_argument("--force", "-f", action="store_true", 
                         help="Force download even if card already exists in database")
+    parser.add_argument("--art-crop", "-a", action="store_true",
+                        help="Download art crop instead of full card image")
     
     args = parser.parse_args()
     
@@ -226,22 +237,33 @@ def main():
         # Check if we have a specific version (set + collector number)
         if set_code and collector_number:
             # Pass the specific version information to the download function
-            print(f"\nDownloading '{card_name}' (Set: {set_code}, #{collector_number})...")
-            
-            # Pass the set code and collector number to get the specific version
-            download_card_images(
-                [card_name],
-                force_download=True,
-                set_codes=[set_code],
-                collector_numbers=[collector_number]
-            )
+            if args.art_crop:
+                print(f"\nDownloading art crop for '{card_name}' (Set: {set_code}, #{collector_number})...")
+                download_art_crops(
+                    [card_name],
+                    force_download=args.force,
+                    set_codes=[set_code],
+                    collector_numbers=[collector_number]
+                )
+            else:
+                print(f"\nDownloading full card image for '{card_name}' (Set: {set_code}, #{collector_number})...")
+                download_card_images(
+                    [card_name],
+                    force_download=args.force,
+                    set_codes=[set_code],
+                    collector_numbers=[collector_number]
+                )
             
             print(f"\nNote: If you want to reference this specific version in the future,")
             print(f"you can use the set code and collector number: {set_code} #{collector_number}")
         else:
             # Just download by name if we don't have specific version info
-            print(f"\nDownloading '{card_name}'...")
-            download_card_images([card_name], force_download=args.force)
+            if args.art_crop:
+                print(f"\nDownloading art crop for '{card_name}'...")
+                download_art_crops([card_name], force_download=args.force)
+            else:
+                print(f"\nDownloading full card image for '{card_name}'...")
+                download_card_images([card_name], force_download=args.force)
     else:
         print("Download cancelled.")
 

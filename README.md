@@ -1,6 +1,6 @@
 # Scryfall Card Art Downloader
 
-This project provides Python scripts to download card data and images from Scryfall.
+This project provides Python scripts to download card data and images from Scryfall with database-backed efficiency.
 
 ## Scripts
 
@@ -28,7 +28,7 @@ python src/json_download.py
 python src/json_download.py "Unique Artwork"
 ```
 
-### `scryfall_art.py`
+### `scryfall_art.py` (Original Version)
 
 Reads a JSON file of card data and downloads art crop images for each card, organizing them by set.
 
@@ -55,6 +55,35 @@ python src/scryfall_art.py .local/json/default-cards.json
 
 # Force re-download of all images (even if they already exist)
 python src/scryfall_art.py .local/json/default-cards.json --force
+```
+
+### `scryfall_art_optimized.py` (Database-Backed Version)
+
+An optimized version that uses the database to track downloaded images and improve efficiency.
+
+**Functionality:**
+
+- All features of the original `scryfall_art.py` script
+- **Uses the database to track downloaded images** instead of checking the filesystem
+- **Batch processes cards** to reduce overhead and improve performance
+- Creates unique identifiers for each card version to avoid duplicates
+- Provides more detailed progress tracking and statistics
+- Supports configurable batch sizes for processing
+
+**Usage:**
+
+```bash
+# Install dependencies
+pip install httpx argparse
+
+# Run the script with your JSON file
+python src/scryfall_art_optimized.py .local/json/default-cards.json
+
+# Force re-download of all images (even if they already exist)
+python src/scryfall_art_optimized.py .local/json/default-cards.json --force
+
+# Specify a custom batch size (default is 100)
+python src/scryfall_art_optimized.py .local/json/default-cards.json --batch-size 50
 ```
 
 ### `scryfall_card_download.py`
@@ -87,7 +116,7 @@ python src/scryfall_card_download.py "Black Lotus" "Counterspell" --force
 
 ### `scryfall_search.py`
 
-Searches for cards by name on Scryfall and allows users to select and download specific versions, including alternate artworks.
+Searches for cards by name on Scryfall and allows users to select and download specific versions, including alternate artworks. Supports downloading both full card images and art crops.
 
 **Functionality:**
 
@@ -95,9 +124,10 @@ Searches for cards by name on Scryfall and allows users to select and download s
 - Displays a list of all matching cards, highlighting alternate artworks as separate items
 - Shows detailed information for each card version (set name, set code, collector number)
 - Allows users to select a specific card version to download
-- Downloads the selected card using the `scryfall_card_download.py` script
+- Downloads the selected card using either `scryfall_card_download.py` or `scryfall_art_download.py`
 - Handles pagination for searches with many results
 - Provides information about the specific version downloaded (set code and collector number)
+- **Supports downloading art crops** with the `--art-crop` flag
 
 **Usage:**
 
@@ -105,11 +135,48 @@ Searches for cards by name on Scryfall and allows users to select and download s
 # Install dependencies
 pip install httpx
 
-# Search for cards with a specific term in their name
+# Search for cards with a specific term in their name and download full card image
 python src/scryfall_search.py "lightning bolt"
+
+# Download art crop instead of full card image
+python src/scryfall_search.py "lightning bolt" --art-crop
 
 # Force re-download even if the card already exists in the database
 python src/scryfall_search.py "black lotus" --force
+
+# Combine options
+python src/scryfall_search.py "black lotus" --art-crop --force
+```
+
+### `scryfall_art_download.py`
+
+Downloads art crop images for specific cards by name, with support for specific printings.
+
+**Functionality:**
+
+- Takes one or more card names as command-line arguments
+- Queries the Scryfall API for each card by exact name
+- Downloads the 'art_crop' image for each card
+- Organizes images by set in the `.local/scryfall_images/` directory
+- **Skips downloading images that already exist** in the database
+- Provides progress tracking and a summary of downloaded/skipped images
+- Includes error handling and rate limiting
+- Supports a `--force` flag to re-download all images even if they already exist
+
+**Usage:**
+
+```bash
+# Install dependencies
+pip install httpx
+
+# Download art crops for specific cards
+python src/scryfall_art_download.py "Black Lotus" "Counterspell"
+
+# Force re-download of all images (even if they already exist)
+python src/scryfall_art_download.py "Black Lotus" "Counterspell" --force
+
+# Download specific printings by providing set codes and collector numbers
+python src/scryfall_art_download.py "Black Lotus" --set LEA --collector 232
 ```
 
 ## Dependencies
@@ -129,7 +196,7 @@ python src/scryfall_search.py "black lotus" --force
 
 ## Database Functionality
 
-The project now includes a SQLite database to track downloaded cards, which helps prevent redundant downloads and provides a way to query your card collection.
+The project includes a SQLite database to track downloaded cards, which helps prevent redundant downloads and provides a way to query your card collection.
 
 ### Database Schema
 
@@ -171,12 +238,39 @@ python src/db_utils.py remove "Black Lotus"
 python src/db_utils.py stats
 ```
 
+### Database Bulk Operations
+
+The `db_bulk_operations.py` script provides utilities for bulk operations on the database:
+
+```bash
+# Verify database integrity (check if all referenced files exist)
+python src/db_bulk_operations.py verify
+python src/db_bulk_operations.py verify --verbose
+
+# Scan a directory for image files
+python src/db_bulk_operations.py scan .local/scryfall_images
+python src/db_bulk_operations.py scan .local/scryfall_images --verbose
+
+# Update the database with existing files
+python src/db_bulk_operations.py scan .local/scryfall_images --update
+python src/db_bulk_operations.py scan .local/scryfall_images --update --verbose
+
+# Clean the database (remove records for missing files)
+python src/db_bulk_operations.py clean  # Dry run by default
+python src/db_bulk_operations.py clean --execute  # Actually remove records
+python src/db_bulk_operations.py clean --execute --verbose
+
+# Generate a comprehensive report on database status
+python src/db_bulk_operations.py report
+```
+
 ### Integration with Card Download
 
-The `scryfall_card_download.py` script now checks the database before downloading cards, which provides several benefits:
+All download scripts now check the database before downloading cards, which provides several benefits:
 - Prevents redundant downloads even if files are moved or renamed
 - Tracks additional metadata about downloaded cards
 - Provides a queryable interface to your card collection
+- Significantly improves performance for repeated operations
 
 ## Testing
 
