@@ -16,3 +16,6 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
 ]
+
+[tool.uv.workspace]
+members = ["src/mcp"]
