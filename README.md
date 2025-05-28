@@ -1,308 +1,257 @@
-# Scryfall Card Art Downloader
+# Scryfall MCP Server
 
-This project provides Python scripts to download card data and images from Scryfall with database-backed efficiency.
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/pypi/v/scryfall-mcp.svg)](https://pypi.org/project/scryfall-mcp/)
 
-## Scripts
+A Model Context Protocol (MCP) server that provides access to the Scryfall API for Magic: The Gathering card data. This server enables AI assistants and other MCP clients to search for cards, retrieve card information, download high-resolution images, and access comprehensive MTG data through a standardized interface.
 
-### `json_download.py`
+## Features
 
-Downloads Scryfall bulk data JSON files and saves them to the `.json` folder.
+- **Card Search**: Search for Magic: The Gathering cards using Scryfall's powerful search syntax
+- **Card Details**: Retrieve detailed information about specific cards including prices, legality, and metadata
+- **Image Downloads**: Download high-resolution card images and art crops
+- **Database Operations**: Manage local card databases with integrity verification
+- **Set Information**: Access information about MTG sets and expansions
+- **Artwork Access**: Get high-quality card artwork and images in multiple formats
+- **Advanced Filtering**: Use Scryfall's advanced search operators for precise queries
 
-**Functionality:**
+## Installation
 
-- Fetches the dynamic download URL for bulk data from the Scryfall API
-- Supports different bulk data types: "Default Cards", "Unique Artwork", or "All Cards"
-- Downloads the JSON data and saves it to the `.local/json` directory
-- Handles HTTP request errors and JSON decoding errors
-
-**Usage:**
+Install the package from PyPI:
 
 ```bash
-# Install dependencies
-pip install httpx
-
-# Download Default Cards (default option)
-python src/json_download.py
-
-# Or specify a different bulk data type
-python src/json_download.py "Unique Artwork"
+pip install scryfall-mcp
 ```
 
-### `scryfall_art.py` (Original Version)
-
-Reads a JSON file of card data and downloads art crop images for each card, organizing them by set.
-
-**Functionality:**
-
-- Reads card data from a provided JSON file
-- For each card, retrieves the `art_crop` image URL
-- Creates a folder structure `.local/scryfall_images/{set_name}` to organize images by set
-- Downloads and saves art crop images as `.local/scryfall_images/{set_name}/{card_name}.{extension}`
-- Also saves individual card data as JSON files alongside the images
-- **Skips downloading images that already exist** to save time and bandwidth
-- Provides progress tracking and a summary of downloaded/skipped images
-- Includes error handling and rate limiting (200ms delay between requests)
-- Supports a `--force` flag to re-download all images even if they already exist
-
-**Usage:**
+Or install from source:
 
 ```bash
-# Install dependencies
-pip install httpx argparse
-
-# Run the script with your JSON file
-python src/scryfall_art.py .local/json/default-cards.json
-
-# Force re-download of all images (even if they already exist)
-python src/scryfall_art.py .local/json/default-cards.json --force
+git clone https://github.com/kaminaduck/scryfall-mcp.git
+cd scryfall-mcp
+pip install -e .
 ```
 
-### `scryfall_art_optimized.py` (Database-Backed Version)
+## Quick Start
 
-An optimized version that uses the database to track downloaded images and improve efficiency.
+### Running the Server
 
-**Functionality:**
-
-- All features of the original `scryfall_art.py` script
-- **Uses the database to track downloaded images** instead of checking the filesystem
-- **Batch processes cards** to reduce overhead and improve performance
-- Creates unique identifiers for each card version to avoid duplicates
-- Provides more detailed progress tracking and statistics
-- Supports configurable batch sizes for processing
-
-**Usage:**
+Start the MCP server:
 
 ```bash
-# Install dependencies
-pip install httpx argparse
-
-# Run the script with your JSON file
-python src/scryfall_art_optimized.py .local/json/default-cards.json
-
-# Force re-download of all images (even if they already exist)
-python src/scryfall_art_optimized.py .local/json/default-cards.json --force
-
-# Specify a custom batch size (default is 100)
-python src/scryfall_art_optimized.py .local/json/default-cards.json --batch-size 50
+python -m mcp
 ```
 
-### `scryfall_card_download.py`
+Or run directly:
 
-Downloads high-resolution 'large' card images for specific cards by name.
-
-**Functionality:**
-
-- Takes one or more card names as command-line arguments
-- Queries the Scryfall API for each card by exact name
-- Downloads the 'large' image for each card
-- Saves images to `.local/scryfall_card_images/` directory
-- **Skips downloading images that already exist** to save time and bandwidth
-- Provides progress tracking and a summary of downloaded/skipped images
-- Includes error handling and rate limiting
-- Supports a `--force` flag to re-download all images even if they already exist
-
-**Usage:**
-
-```bash
-# Install dependencies
-pip install httpx
-
-# Download images for specific cards
-python src/scryfall_card_download.py "Black Lotus" "Counterspell"
-
-# Force re-download of all images (even if they already exist)
-python src/scryfall_card_download.py "Black Lotus" "Counterspell" --force
+```python
+from scryfall_mcp import main
+main()
 ```
 
-### `scryfall_search.py`
+### Basic Usage
 
-Searches for cards by name on Scryfall and allows users to select and download specific versions, including alternate artworks. Supports downloading both full card images and art crops.
+The server provides several tools that can be used by MCP clients:
 
-**Functionality:**
+#### Search for Cards
 
-- Takes a search term as input and queries the Scryfall API
-- Displays a list of all matching cards, highlighting alternate artworks as separate items
-- Shows detailed information for each card version (set name, set code, collector number)
-- Allows users to select a specific card version to download
-- Downloads the selected card using either `scryfall_card_download.py` or `scryfall_art_download.py`
-- Handles pagination for searches with many results
-- Provides information about the specific version downloaded (set code and collector number)
-- **Supports downloading art crops** with the `--art-crop` flag
+```python
+# Search for Lightning Bolt cards
+result = mcp_search_cards("lightning bolt")
 
-**Usage:**
+# Search for red creatures with converted mana cost 3
+result = mcp_search_cards("t:creature c:red cmc:3")
 
-```bash
-# Install dependencies
-pip install httpx
-
-# Search for cards with a specific term in their name and download full card image
-python src/scryfall_search.py "lightning bolt"
-
-# Download art crop instead of full card image
-python src/scryfall_search.py "lightning bolt" --art-crop
-
-# Force re-download even if the card already exists in the database
-python src/scryfall_search.py "black lotus" --force
-
-# Combine options
-python src/scryfall_search.py "black lotus" --art-crop --force
+# Search for cards in a specific set
+result = mcp_search_cards("set:znr")
 ```
 
-### `scryfall_art_download.py`
+#### Download Card Images
 
-Downloads art crop images for specific cards by name, with support for specific printings.
+```python
+# Download a specific card image
+result = mcp_download_card("Lightning Bolt")
 
-**Functionality:**
+# Download from a specific set
+result = mcp_download_card("Lightning Bolt", set_code="m10", collector_number="146")
 
-- Takes one or more card names as command-line arguments
-- Queries the Scryfall API for each card by exact name
-- Downloads the 'art_crop' image for each card
-- Organizes images by set in the `.local/scryfall_images/` directory
-- **Skips downloading images that already exist** in the database
-- Provides progress tracking and a summary of downloaded/skipped images
-- Includes error handling and rate limiting
-- Supports a `--force` flag to re-download all images even if they already exist
-
-**Usage:**
-
-```bash
-# Install dependencies
-pip install httpx
-
-# Download art crops for specific cards
-python src/scryfall_art_download.py "Black Lotus" "Counterspell"
-
-# Force re-download of all images (even if they already exist)
-python src/scryfall_art_download.py "Black Lotus" "Counterspell" --force
-
-# Download specific printings by providing set codes and collector numbers
-python src/scryfall_art_download.py "Black Lotus" --set LEA --collector 232
+# Force re-download
+result = mcp_download_card("Lightning Bolt", force_download=True)
 ```
 
-## Dependencies
+#### Download Art Crops
 
-- [httpx](https://www.python-httpx.org/): For making HTTP requests to the Scryfall API
-- [argparse](https://docs.python.org/3/library/argparse.html): For parsing command-line arguments
-- [os](https://docs.python.org/3/library/os.html): For file system operations
-- [json](https://docs.python.org/3/library/json.html): For working with JSON data
-- [time](https://docs.python.org/3/library/time.html): For implementing delays between requests
+```python
+# Download art crop for a card
+result = mcp_download_art_crop("Lightning Bolt")
 
-## Output
-
-- **`.local/json/`**: Contains downloaded bulk data JSON files
-- **`.local/scryfall_images/`**: Contains subfolders for each card set with art crop images and card data JSON files
-- **`.local/scryfall_card_images/`**: Contains high-resolution 'large' card images downloaded by name
-- **`.local/scryfall_db.sqlite`**: SQLite database tracking downloaded cards
-
-## Database Functionality
-
-The project includes a SQLite database to track downloaded cards, which helps prevent redundant downloads and provides a way to query your card collection.
-
-### Database Schema
-
-The database contains a single table `downloaded_cards` with the following columns:
-- `id`: Unique identifier for the record
-- `card_name`: Name of the card
-- `filename`: Filename where the card image is saved
-- `download_date`: Timestamp when the card was downloaded
-- `card_id`: Scryfall ID of the card (if available)
-- `set_code`: Set code of the card (if available)
-- `image_url`: URL of the downloaded image (if available)
-
-### Database Utilities
-
-The `db_utils.py` script provides command-line utilities for managing the database:
-
-```bash
-# Initialize the database (automatically done when needed)
-python src/db_utils.py init
-
-# List all downloaded cards
-python src/db_utils.py list
-
-# List with sorting options
-python src/db_utils.py list --sort name --order asc
-python src/db_utils.py list --sort date --order desc
-python src/db_utils.py list --sort set --order desc
-
-# Limit the number of results
-python src/db_utils.py list --limit 10
-
-# Search for cards
-python src/db_utils.py search "lotus"
-
-# Remove a card from the database
-python src/db_utils.py remove "Black Lotus"
-
-# Show database statistics
-python src/db_utils.py stats
+# Download art crop from specific printing
+result = mcp_download_art_crop("Lightning Bolt", set_code="m10", collector_number="146")
 ```
 
-### Database Bulk Operations
+## Available Tools
 
-The `db_bulk_operations.py` script provides utilities for bulk operations on the database:
+### Search Tools
 
-```bash
-# Verify database integrity (check if all referenced files exist)
-python src/db_bulk_operations.py verify
-python src/db_bulk_operations.py verify --verbose
+- **`mcp_search_cards(query)`**: Search for cards using Scryfall syntax
+- **`mcp_get_card_artwork(card_id)`**: Get artwork URLs for a specific card
 
-# Scan a directory for image files
-python src/db_bulk_operations.py scan .local/scryfall_images
-python src/db_bulk_operations.py scan .local/scryfall_images --verbose
+### Download Tools
 
-# Update the database with existing files
-python src/db_bulk_operations.py scan .local/scryfall_images --update
-python src/db_bulk_operations.py scan .local/scryfall_images --update --verbose
+- **`mcp_download_card(card_name, set_code?, collector_number?, force_download?)`**: Download high-resolution card images
+- **`mcp_download_art_crop(card_name, set_code?, collector_number?, force_download?)`**: Download art crop images
 
-# Clean the database (remove records for missing files)
-python src/db_bulk_operations.py clean  # Dry run by default
-python src/db_bulk_operations.py clean --execute  # Actually remove records
-python src/db_bulk_operations.py clean --execute --verbose
+### Database Tools
 
-# Generate a comprehensive report on database status
-python src/db_bulk_operations.py report
+- **`mcp_verify_database()`**: Verify database integrity
+- **`mcp_scan_directory(directory, update_db?)`**: Scan directories for image files
+- **`mcp_clean_database(execute?)`**: Clean database of missing file references
+- **`mcp_database_report()`**: Generate comprehensive database report
+
+## Available Resources
+
+### Card Resources
+
+- **`resource://card/{card_id}`**: Get detailed card information by Scryfall ID
+- **`resource://card/name/{card_name}`**: Get detailed card information by name
+- **`resource://random_card`**: Get a random Magic: The Gathering card
+
+### Database Resources
+
+- **`resource://database/stats`**: Get database statistics and information
+
+## Search Syntax
+
+The server supports Scryfall's powerful search syntax. Here are some examples:
+
+| Query | Description |
+|-------|-------------|
+| `lightning bolt` | Cards with "lightning bolt" in the name |
+| `t:creature` | All creature cards |
+| `c:red` | All red cards |
+| `cmc:3` | Cards with converted mana cost 3 |
+| `set:znr` | Cards from Zendikar Rising |
+| `r:mythic` | Mythic rare cards |
+| `pow>=4` | Creatures with power 4 or greater |
+| `o:"draw a card"` | Cards with "draw a card" in rules text |
+| `is:commander` | Cards that can be commanders |
+| `year:2023` | Cards printed in 2023 |
+
+<details>
+<summary>Advanced Search Examples</summary>
+
+```python
+# Find all red creatures with power 4 or greater from recent sets
+mcp_search_cards("t:creature c:red pow>=4 year>=2020")
+
+# Find all planeswalkers that cost 3 mana
+mcp_search_cards("t:planeswalker cmc:3")
+
+# Find all cards with "flying" and "vigilance"
+mcp_search_cards("o:flying o:vigilance")
+
+# Find all legendary creatures that can be commanders
+mcp_search_cards("t:legendary t:creature is:commander")
+
+# Find all cards illustrated by a specific artist
+mcp_search_cards("a:\"Rebecca Guay\"")
 ```
 
-### Integration with Card Download
+</details>
 
-All download scripts now check the database before downloading cards, which provides several benefits:
-- Prevents redundant downloads even if files are moved or renamed
-- Tracks additional metadata about downloaded cards
-- Provides a queryable interface to your card collection
-- Significantly improves performance for repeated operations
+## Configuration
 
-## Testing
+The server uses the following default directories:
 
-The project includes pytest-based tests to ensure functionality works as expected.
+- **Card Images**: `.local/scryfall_card_images/`
+- **Art Crops**: `.local/scryfall_images/`
+- **Database**: Local SQLite database for tracking downloads
 
-### Running Tests Locally
+## Error Handling
+
+All tools return structured responses with status indicators:
+
+```python
+{
+    "status": "success" | "error",
+    "message": "Description of result or error",
+    "data": {...}  # Additional response data
+}
+```
+
+## Requirements
+
+- Python 3.12+
+- httpx >= 0.28.1
+- mcp[cli] >= 1.8.0
+
+## Development
+
+### Setting up Development Environment
 
 ```bash
-# Install pytest and project dependencies
+git clone https://github.com/kaminaduck/scryfall-mcp.git
+cd scryfall-mcp
 pip install -e ".[dev]"
-
-# Run all tests
-pytest
-
-# Run specific test file
-pytest src/test_db.py
-
-# Run with verbose output
-pytest -v
 ```
 
-### Continuous Integration
+### Running Tests
 
-This project uses GitHub Actions to automatically run tests on push and pull requests. The workflow:
+```bash
+pytest
+```
 
-1. Runs tests on multiple Python versions (3.8 to 3.12)
-2. Installs all dependencies
-3. Executes the pytest suite
-4. Uploads test results as artifacts
+### Code Style
 
-The GitHub workflow configuration is located in `.github/workflows/pytest.yml`.
+This project follows PEP 8 style guidelines and includes comprehensive docstrings following the project's documentation standards.
+
+## API Reference
+
+### Tool Signatures
+
+```python
+def mcp_search_cards(query: str) -> Dict[str, Any]
+def mcp_download_card(card_name: str, set_code: Optional[str] = None, 
+                     collector_number: Optional[str] = None, 
+                     force_download: bool = False) -> Dict[str, Any]
+def mcp_download_art_crop(card_name: str, set_code: Optional[str] = None,
+                         collector_number: Optional[str] = None,
+                         force_download: bool = False) -> Dict[str, Any]
+def mcp_get_card_artwork(card_id: str) -> Dict[str, Any]
+def mcp_verify_database() -> Dict[str, Any]
+def mcp_scan_directory(directory: str, update_db: bool = False) -> Dict[str, Any]
+def mcp_clean_database(execute: bool = False) -> Dict[str, Any]
+def mcp_database_report() -> Dict[str, Any]
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the Apache-2.0 License. See the LICENSE file for more details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Scryfall](https://scryfall.com/) for providing the comprehensive Magic: The Gathering API
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the standardized interface
+- The Magic: The Gathering community for their continued support
+
+## Support
+
+If you encounter any issues or have questions:
+
+1. Check the [Issues](https://github.com/kaminaduck/scryfall-mcp/issues) page
+2. Create a new issue with detailed information about your problem
+3. Include relevant error messages and system information
+
+---
+
+**Note**: This is an unofficial tool and is not affiliated with Wizards of the Coast or Scryfall. Magic: The Gathering is a trademark of Wizards of the Coast LLC.
