@@ -4,6 +4,7 @@ import time
 import argparse
 import json
 from db_manager import CardDatabase
+from config import config
 
 
 def download_card_images(card_names, force_download=False, set_codes=None, collector_numbers=None):
@@ -30,8 +31,8 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
     
     print(f"Processing {total_cards} cards...")
     
-    output_folder = ".local/scryfall_card_images"
-    os.makedirs(output_folder, exist_ok=True)
+    # Use configuration for output directory
+    output_folder = str(config.cards_dir)
     
     # Initialize the database
     with CardDatabase() as db:

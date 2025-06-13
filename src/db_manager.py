@@ -1,19 +1,23 @@
 import os
 import sqlite3
 from typing import List, Optional, Tuple
+from config import config
 
 
 class CardDatabase:
     """
     Manages a SQLite database for tracking downloaded Scryfall cards.
     """
-    def __init__(self, db_path: str = ".local/scryfall_db.sqlite"):
+    def __init__(self, db_path: str = None):
         """
         Initialize the database connection.
         
         Args:
-            db_path: Path to the SQLite database file
+            db_path: Path to the SQLite database file (uses config default if None)
         """
+        if db_path is None:
+            db_path = str(config.database_path)
+        
         # Ensure the directory exists
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         

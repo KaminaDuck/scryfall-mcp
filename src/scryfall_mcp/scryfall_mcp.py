@@ -32,6 +32,7 @@ from scryfall_art_download import download_art_crops
 from scryfall_search import search_cards, group_cards_by_name_and_art
 from db_manager import CardDatabase
 from db_bulk_operations import verify_database_integrity, scan_directory_for_images, clean_database
+from config import config
 
 # Configure logging
 logging.basicConfig(
@@ -138,7 +139,7 @@ def mcp_download_card(card_name: str, set_code: Optional[str] = None, collector_
         else:
             image_filename = f"{card_name_for_filename}.jpg"
         
-        image_filepath = os.path.join(".local/scryfall_card_images", image_filename)
+        image_filepath = config.get_card_image_path(image_filename)
         
         # Check if the file exists
         if os.path.exists(image_filepath):
@@ -356,6 +357,31 @@ def mcp_clean_database(execute: bool = False) -> Dict[str, Any]:
         return {"status": "error", "message": str(e)}
 
 @server.tool()
+def mcp_migrate_files() -> Dict[str, Any]:
+    """
+    Migrate files from the old directory structure to the new .local structure.
+    
+    Returns:
+        A dictionary containing the migration results
+    """
+    logger.info("[API] Migrating files to new directory structure")
+    
+    try:
+        migration_results = config.migrate_from_old_structure()
+        
+        return {
+            "status": "success",
+            "cards_moved": migration_results['cards_moved'],
+            "art_crops_moved": migration_results['art_crops_moved'],
+            "errors": migration_results['errors'],
+            "message": f"Migration completed. Moved {migration_results['cards_moved']} card images and {migration_results['art_crops_moved']} art crops."
+        }
+    
+    except Exception as e:
+        logger.error(f"[Error] Failed to migrate files: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@server.tool()
 def mcp_database_report() -> Dict[str, Any]:
     """
     Generate a comprehensive report on the database status.
@@ -386,30 +412,39 @@ def mcp_database_report() -> Dict[str, Any]:
                 if not os.path.exists(card['filename']):
                     missing_files += 1
             
-            # Check image directories
-            image_dir = ".local/scryfall_images"
+            # Check image directories using configuration
+            art_crops_dir = str(config.art_crops_dir)
+            cards_dir = str(config.cards_dir)
             set_dirs = []
             total_images = 0
             
-            if os.path.exists(image_dir):
-                set_dirs = [d for d in os.listdir(image_dir) if os.path.isdir(os.path.join(image_dir, d))]
+            # Count art crop images
+            if os.path.exists(art_crops_dir):
+                set_dirs = [d for d in os.listdir(art_crops_dir) if os.path.isdir(os.path.join(art_crops_dir, d))]
                 
-                # Count image files
                 for set_dir in set_dirs:
-                    set_path = os.path.join(image_dir, set_dir)
+                    set_path = os.path.join(art_crops_dir, set_dir)
                     image_files = [f for f in os.listdir(set_path) 
                                 if os.path.isfile(os.path.join(set_path, f)) and 
                                 f.lower().endswith(('.jpg', '.png', '.jpeg', '.gif'))]
                     total_images += len(image_files)
+            
+            # Count card images
+            if os.path.exists(cards_dir):
+                card_files = [f for f in os.listdir(cards_dir) 
+                            if os.path.isfile(os.path.join(cards_dir, f)) and 
+                            f.lower().endswith(('.jpg', '.png', '.jpeg', '.gif'))]
+                total_images += len(card_files)
             
             return {
                 "status": "success",
                 "total_records": total_records,
                 "missing_files": missing_files,
                 "sets": {set_code: count for set_code, count in sets.items()},
-                "set_directories": len(set_dirs),
+                "art_crop_set_directories": len(set_dirs),
                 "total_images": total_images,
-                "database_coverage": round(total_records / total_images * 100, 2) if total_images > 0 else 0
+                "database_coverage": round(total_records / total_images * 100, 2) if total_images > 0 else 0,
+                "config": config.get_config_dict()
             }
     
     except Exception as e:

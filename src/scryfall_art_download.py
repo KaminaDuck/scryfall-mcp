@@ -19,6 +19,7 @@ import time
 import json
 from typing import List, Optional
 from db_manager import CardDatabase
+from config import config
 
 
 def download_art_crops(
@@ -49,8 +50,8 @@ def download_art_crops(
     
     print(f"Processing {total_cards} cards for art crop download...")
     
-    output_folder = ".local/scryfall_images"
-    os.makedirs(output_folder, exist_ok=True)
+    # Use configuration for output directory
+    output_folder = str(config.art_crops_dir)
     
     # Initialize the database
     with CardDatabase() as db:
@@ -88,12 +89,8 @@ def download_art_crops(
                     art_crop_url = card_data.get("image_uris", {}).get("art_crop")
                     
                     if art_crop_url:
-                        # Create a folder for the set
+                        # Prepare the filename and paths using configuration
                         set_name = card_data.get("set_name", "unknown_set").replace(" ", "_").replace(":", "_")
-                        set_folder = os.path.join(output_folder, set_name)
-                        os.makedirs(set_folder, exist_ok=True)
-                        
-                        # Prepare the filename
                         card_name_for_filename = card_name.replace(" ", "_").replace("//", "_")
                         image_extension = os.path.splitext(art_crop_url)[1]
                         if "?" in art_crop_url:
@@ -106,7 +103,7 @@ def download_art_crops(
                         else:
                             image_filename = f"{card_name_for_filename}{image_extension}"
                         
-                        image_filepath = os.path.join(set_folder, image_filename)
+                        image_filepath = config.get_art_crop_path(set_name, image_filename)
                         
                         print(f"[{index}/{total_cards}] Downloading art crop for '{card_name}'...")
                         image_response = client.get(art_crop_url)
@@ -119,16 +116,16 @@ def download_art_crops(
                         # Add the card to the database with the version identifier
                         db.add_card(
                             card_name=card_version_id,
-                            filename=image_filepath,
+                            filename=str(image_filepath),
                             card_id=card_data.get("id"),
                             set_code=card_data.get("set"),
                             image_url=art_crop_url
                         )
                         downloaded_count += 1
                         
-                        # Save card data to JSON file
+                        # Save card data to JSON file using configuration
                         json_filename = f"{card_name_for_filename}.json"
-                        json_filepath = os.path.join(set_folder, json_filename)
+                        json_filepath = config.get_json_path(set_name, json_filename)
                         with open(json_filepath, 'w', encoding='utf-8') as json_file:
                             json.dump(card_data, json_file, indent=4)
                     else:
