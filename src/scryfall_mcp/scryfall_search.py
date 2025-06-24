@@ -13,8 +13,8 @@ import json
 import sys
 import time
 from typing import List, Dict, Any, Optional
-from scryfall_card_download import download_card_images
-from scryfall_art_download import download_art_crops
+from .scryfall_card_download import download_card_images
+from .scryfall_art_download import download_art_crops
 
 
 def search_cards(search_term: str) -> List[Dict[str, Any]]:

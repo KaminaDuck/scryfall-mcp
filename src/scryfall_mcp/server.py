@@ -17,21 +17,17 @@ Key features:
 
 import logging
 import os
-import sys
 import json
 from typing import Dict, List, Optional, Any, Union, Tuple
-
-# Add the parent directory to the path so we can import our modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server import FastMCP
 from mcp.types import Tool, Resource
 import httpx
-from scryfall_card_download import download_card_images
-from scryfall_art_download import download_art_crops
-from scryfall_search import search_cards, group_cards_by_name_and_art
-from db_manager import CardDatabase
-from db_bulk_operations import verify_database_integrity, scan_directory_for_images, clean_database
+from .scryfall_card_download import download_card_images
+from .scryfall_art_download import download_art_crops
+from .scryfall_search import search_cards, group_cards_by_name_and_art
+from .db_manager import CardDatabase
+from .db_bulk_operations import verify_database_integrity, scan_directory_for_images, clean_database
 
 # Configure logging
 logging.basicConfig(

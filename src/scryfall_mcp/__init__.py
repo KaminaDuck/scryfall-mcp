@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """
-MCP Server for Scryfall
+Scryfall MCP Server
 
 This module provides an MCP server for interacting with the Scryfall API,
 allowing users to search for cards, download high-resolution card images,
@@ -25,7 +25,7 @@ def main() -> None:
     This function initializes and runs the Scryfall MCP server,
     which provides tools and resources for interacting with the Scryfall API.
     """
-    from .scryfall_mcp import server
+    from .server import server
     
     logging.basicConfig(
         level=logging.INFO,
@@ -35,3 +35,6 @@ def main() -> None:
     
     logger.info("[Setup] Starting Scryfall MCP server...")
     server.run()
+
+# Export the main function for the console script entry point
+__all__ = ["main"]

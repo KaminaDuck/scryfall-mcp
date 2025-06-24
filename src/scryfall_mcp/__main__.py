@@ -4,7 +4,7 @@
 Entrypoint for the Scryfall MCP package.
 
 This module serves as the entrypoint when the package is run directly
-using `python -m mcp` or when installed as an executable.
+using `python -m scryfall_mcp` or when installed as an executable.
 """
 
 from . import main

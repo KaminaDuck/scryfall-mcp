@@ -3,7 +3,7 @@ import os
 import time
 import argparse
 import json
-from db_manager import CardDatabase
+from .db_manager import CardDatabase
 
 
 def download_card_images(card_names, force_download=False, set_codes=None, collector_numbers=None):

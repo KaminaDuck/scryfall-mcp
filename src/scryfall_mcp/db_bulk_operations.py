@@ -18,7 +18,7 @@ import os
 import argparse
 import json
 from typing import List, Dict, Any, Optional, Tuple
-from db_manager import CardDatabase
+from .db_manager import CardDatabase
 
 
 def verify_database_integrity(verbose: bool = False) -> Tuple[int, int]:
