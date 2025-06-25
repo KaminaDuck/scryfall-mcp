@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "scryfall-server": {
+    "scryfall-mcp": {
       "command": "python",
-      "args": ["src/mcp/scryfall_server.py"],
+      "args": ["src/scryfall_mcp/server.py"],
       "env": {},
       "disabled": false,
       "autoApprove": []
