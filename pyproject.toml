@@ -1,6 +1,6 @@
 [project]
 name = "scryfall-mcp"
-version = "0.0.2"
+version = "0.0.3"
 description = "A Model Context Protocol (MCP) server that provides access to the Scryfall API for Magic: The Gathering card data."
 readme = "README.md"
 authors = [
