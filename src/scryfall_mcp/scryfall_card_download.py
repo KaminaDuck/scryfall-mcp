@@ -30,7 +30,7 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
     
     print(f"Processing {total_cards} cards...")
     
-    output_folder = ".local/scryfall_card_images"
+    output_folder = os.path.expanduser('~/.scryfall_mcp/card_images')
     os.makedirs(output_folder, exist_ok=True)
     
     # Initialize the database
