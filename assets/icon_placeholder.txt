@@ -1,0 +1,16 @@
+Icon Placeholder
+================
+
+Please add a 512x512 PNG icon named "icon.png" in this directory.
+
+The icon should represent the Scryfall MCP extension and could include:
+- Magic: The Gathering card imagery
+- Scryfall logo elements (with permission)
+- Database/API symbolism
+- MCP/Desktop Extension branding
+
+Requirements:
+- Format: PNG
+- Size: 512x512 pixels
+- Transparency: Optional but recommended
+- File name: icon.png

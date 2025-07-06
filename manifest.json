@@ -1,0 +1,194 @@
+{
+  "dxt_version": "0.1",
+  "name": "scryfall-dxt",
+  "display_name": "Scryfall MCP Server",
+  "version": "1.0.0",
+  "description": "Desktop Extension for Scryfall API integration - search, download, and manage Magic: The Gathering card data",
+  "long_description": "# Scryfall MCP Server\n\nA comprehensive Model Context Protocol server for interacting with the Scryfall API and managing a local database of Magic: The Gathering card images and artwork.\n\n## Features\n\n- **Card Search**: Search for Magic cards using Scryfall's powerful search syntax\n- **Image Downloads**: Download card images and art crops with intelligent caching\n- **Local Database**: Maintain a local SQLite database of downloaded cards\n- **Batch Operations**: Download multiple cards at once\n- **Artwork Management**: Access and manage card artwork with various image formats\n- **Database Tools**: Verify integrity, clean orphaned records, and generate reports\n\n## Available Tools\n\n### Search & Information\n- `mcp_search_cards`: Search for cards using Scryfall's search syntax\n- `mcp_get_card_artwork`: Get artwork URLs by card ID\n- `mcp_get_card_artwork_by_name`: Get artwork URLs by card name\n- `mcp_get_random_card_artwork`: Get a random card's artwork\n- `mcp_get_card_image_urls`: Get all image URLs for a card\n\n### Download Operations\n- `mcp_download_card`: Download a single card image\n- `mcp_download_art_crop`: Download a card's art crop\n- `mcp_batch_download`: Download multiple card images\n- `mcp_batch_download_art_crops`: Download multiple art crops\n\n### Database Management\n- `mcp_verify_database`: Check database integrity\n- `mcp_scan_directory`: Scan for new images\n- `mcp_clean_database`: Remove orphaned records\n- `mcp_database_report`: Generate comprehensive report\n- `mcp_get_card_info`: Get card info from local database\n- `mcp_search_database`: Search local database\n- `mcp_remove_card`: Remove card from database\n- `mcp_get_database_stats`: Get database statistics\n\n## Configuration\n\nThe extension stores data in configurable directories for card images and art crops. You can customize storage locations and API behavior through the configuration options.",
+  "author": {
+    "name": "Scryfall MCP Contributors",
+    "email": "support@example.com"
+  },
+  "homepage": "https://github.com/yourusername/scryfall-mcp",
+  "documentation": "https://github.com/yourusername/scryfall-mcp/wiki",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/scryfall-mcp.git"
+  },
+  "icon": "assets/icon.png",
+  "license": "MIT",
+  "keywords": [
+    "magic",
+    "mtg",
+    "scryfall",
+    "cards",
+    "database",
+    "artwork",
+    "mcp",
+    "modelcontextprotocol"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "NODE_ENV": "production",
+        "SCRYFALL_RATE_LIMIT_DELAY": "${rate_limit_delay}",
+        "SCRYFALL_MAX_CONCURRENT_DOWNLOADS": "${max_concurrent_downloads}",
+        "SCRYFALL_CARD_IMAGES_DIR": "${card_images_dir}",
+        "SCRYFALL_ART_CROPS_DIR": "${art_crops_dir}",
+        "SCRYFALL_DATABASE_PATH": "${database_path}",
+        "SCRYFALL_VERBOSE_LOGGING": "${verbose_logging}"
+      },
+      "timeout": 30000
+    }
+  },
+  "runtime": {
+    "node": {
+      "version": ">=18.0.0"
+    }
+  },
+  "dependencies": {
+    "node": {
+      "bundled": true
+    }
+  },
+  "user_config": {
+    "rate_limit_delay": {
+      "type": "number",
+      "title": "API Rate Limit Delay (ms)",
+      "description": "Delay between API requests to respect rate limits",
+      "default": 100,
+      "minimum": 50,
+      "maximum": 1000
+    },
+    "max_concurrent_downloads": {
+      "type": "number",
+      "title": "Max Concurrent Downloads",
+      "description": "Maximum number of images to download simultaneously",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 10
+    },
+    "card_images_dir": {
+      "type": "string",
+      "title": "Card Images Directory",
+      "description": "Directory to store downloaded card images",
+      "default": "${XDG_DATA_HOME}/scryfall-mcp/card-images"
+    },
+    "art_crops_dir": {
+      "type": "string",
+      "title": "Art Crops Directory",
+      "description": "Directory to store downloaded art crops",
+      "default": "${XDG_DATA_HOME}/scryfall-mcp/art-crops"
+    },
+    "database_path": {
+      "type": "string",
+      "title": "Database Path",
+      "description": "Path to SQLite database file",
+      "default": "${XDG_DATA_HOME}/scryfall-mcp/scryfall.db"
+    },
+    "verbose_logging": {
+      "type": "boolean",
+      "title": "Verbose Logging",
+      "description": "Enable detailed logging for debugging",
+      "default": false
+    }
+  },
+  "tools": [
+    {
+      "name": "mcp_search_cards",
+      "description": "Search for Magic: The Gathering cards using Scryfall's search syntax"
+    },
+    {
+      "name": "mcp_download_card",
+      "description": "Download a card image to local storage"
+    },
+    {
+      "name": "mcp_download_art_crop",
+      "description": "Download a card's art crop image"
+    },
+    {
+      "name": "mcp_batch_download",
+      "description": "Download multiple card images at once"
+    },
+    {
+      "name": "mcp_batch_download_art_crops",
+      "description": "Download art crops for multiple cards"
+    },
+    {
+      "name": "mcp_get_card_artwork",
+      "description": "Get artwork URLs for a card by ID"
+    },
+    {
+      "name": "mcp_get_card_artwork_by_name",
+      "description": "Get artwork URLs for a card by name"
+    },
+    {
+      "name": "mcp_get_random_card_artwork",
+      "description": "Get artwork URLs for a random card"
+    },
+    {
+      "name": "mcp_get_card_image_urls",
+      "description": "Get all available image URLs for a card"
+    },
+    {
+      "name": "mcp_verify_database",
+      "description": "Verify database integrity and check for missing files"
+    },
+    {
+      "name": "mcp_scan_directory",
+      "description": "Scan directories for images and update database"
+    },
+    {
+      "name": "mcp_clean_database",
+      "description": "Remove database records for missing files"
+    },
+    {
+      "name": "mcp_database_report",
+      "description": "Generate a comprehensive database report"
+    },
+    {
+      "name": "mcp_get_card_info",
+      "description": "Get card information from local database"
+    },
+    {
+      "name": "mcp_search_database",
+      "description": "Search the local database for cards"
+    },
+    {
+      "name": "mcp_remove_card",
+      "description": "Remove a card from the local database"
+    },
+    {
+      "name": "mcp_get_database_stats",
+      "description": "Get statistics about the local database"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "search_and_download",
+      "description": "Search for cards and download their images",
+      "arguments": ["query", "limit"],
+      "text": "Search for Magic: The Gathering cards matching the query '${arguments.query}' and download their images. ${arguments.limit ? `Limit the results to ${arguments.limit} cards.` : ''} First use mcp_search_cards to find matching cards, then use mcp_batch_download to download the images for the found cards."
+    },
+    {
+      "name": "database_maintenance",
+      "description": "Perform database maintenance tasks",
+      "arguments": [],
+      "text": "Perform a complete database maintenance routine. First run mcp_verify_database to check integrity, then mcp_scan_directory to find new images, followed by mcp_clean_database to remove orphaned records, and finally mcp_database_report to show the current state."
+    },
+    {
+      "name": "analyze_collection",
+      "description": "Analyze the local card collection",
+      "arguments": ["set_code"],
+      "text": "Analyze my local Magic: The Gathering card collection${arguments.set_code ? ` for set ${arguments.set_code}` : ''}. Use mcp_database_report to get an overview, then mcp_search_database to find specific cards${arguments.set_code ? ` from set ${arguments.set_code}` : ''}, and provide insights about the collection."
+    }
+  ],
+  "compatibility": {
+    "claude_desktop": ">=0.10.0"
+  },
+  "platforms": ["darwin", "win32", "linux"]
+}

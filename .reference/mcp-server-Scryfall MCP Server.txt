@@ -1,0 +1,9 @@
+2025-07-06T18:40:04.065Z [Scryfall MCP Server] [info] Initializing server... { metadata: undefined }
+2025-07-06T18:40:04.074Z [Scryfall MCP Server] [info] Using built-in Node.js for MCP server: Scryfall MCP Server { metadata: undefined }
+2025-07-06T18:40:04.098Z [Scryfall MCP Server] [info] Server started and connected successfully { metadata: undefined }
+2025-07-06T18:40:04.212Z [Scryfall MCP Server] [info] Message from client: {"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}},"jsonrpc":"2.0","id":0} { metadata: undefined }
+2025-07-06T18:40:04.239Z [Scryfall MCP Server] [info] Server transport closed { metadata: undefined }
+2025-07-06T18:40:04.239Z [Scryfall MCP Server] [info] Client transport closed { metadata: undefined }
+2025-07-06T18:40:04.239Z [Scryfall MCP Server] [info] Server transport closed unexpectedly, this is likely due to the process exiting early. If you are developing this MCP server you can add output to stderr (i.e. `console.error('...')` in JavaScript, `print('...', file=sys.stderr)` in python) and it will appear in this log. { metadata: undefined }
+2025-07-06T18:40:04.239Z [Scryfall MCP Server] [error] Server disconnected. For troubleshooting guidance, please visit our [debugging documentation](https://modelcontextprotocol.io/docs/tools/debugging) { metadata: { context: 'connection', stack: undefined } }
+2025-07-06T18:40:04.240Z [Scryfall MCP Server] [info] Client transport closed { metadata: undefined }
