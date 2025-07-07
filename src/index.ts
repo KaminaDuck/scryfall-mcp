@@ -1,25 +1,48 @@
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import server from './server.js';
+#!/usr/bin/env node
 
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('Scryfall DXT MCP server started and ready');
+import { createServer } from './mcp/server.js';
+import { logger } from './utils/logger.js';
+import { config } from './config/index.js';
+import { ConfigurationError } from './utils/errors.js';
+
+async function main(): Promise<void> {
+  try {
+    logger.info('Starting Scryfall MCP server', {
+      version: '1.0.0',
+      nodeVersion: process.version,
+      logLevel: config.logging.level,
+    });
+
+    if (!config.neo4j.password) {
+      throw new ConfigurationError(
+        'Neo4j password is required. Please set NEO4J_PASSWORD environment variable.',
+        'NEO4J_PASSWORD',
+      );
+    }
+
+    logger.debug('Configuration loaded', {
+      neo4jUri: config.neo4j.uri,
+      neo4jUsername: config.neo4j.username,
+      imageStoragePath: config.storage.imagePath,
+      scryfallRateLimit: config.scryfall.rateLimit,
+    });
+
+    const server = await createServer();
+    
+    logger.info('Initializing MCP server...');
+    await server.start();
+    
+    logger.info('Scryfall MCP server is running and ready to accept requests');
+
+  } catch (error) {
+    logger.error('Failed to start Scryfall MCP server', error instanceof Error ? error : undefined);
+    process.exit(1);
+  }
 }
 
-// Handle uncaught exceptions and unhandled promise rejections
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});
-
-// Start the server
-main().catch((error) => {
-  console.error('Failed to start server:', error);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    logger.error('Unhandled error in main process', error);
+    process.exit(1);
+  });
+}

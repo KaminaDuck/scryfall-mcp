@@ -1,364 +1,355 @@
 # Scryfall MCP Server
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-blue.svg)](https://www.typescriptlang.org/)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
+![Node.js](https://img.shields.io/badge/node.js-%3E%3D18.0.0-green.svg)
+![TypeScript](https://img.shields.io/badge/typescript-5.7.3-blue.svg)
 
-A Model Context Protocol (MCP) server that provides access to the Scryfall API for Magic: The Gathering card data. This server enables AI assistants and other MCP clients to search for cards, retrieve card information, download high-resolution images, and access comprehensive MTG data through a standardized interface.
-
-Built with Node.js and TypeScript for modern performance and type safety.
+A Model Context Protocol (MCP) server that provides LLMs with access to the Scryfall API for Magic: The Gathering card data, image downloading, and metadata storage in a Neo4j graph database.
 
 ## Features
 
-- **Card Search**: Search for Magic: The Gathering cards using Scryfall's powerful search syntax
-- **Card Details**: Retrieve detailed information about specific cards including prices, legality, and metadata
-- **Image Downloads**: Download high-resolution card images and art crops with batch support
-- **Database Operations**: Manage local SQLite card databases with integrity verification
-- **Set Information**: Access information about MTG sets and expansions
-- **Artwork Access**: Get high-quality card artwork and images in multiple formats
-- **Advanced Filtering**: Use Scryfall's advanced search operators for precise queries
-- **CLI Tools**: Command-line utilities for database management and card operations
-- **Type Safety**: Full TypeScript implementation with comprehensive type definitions
+- 🔍 **Card Search**: Search MTG cards using Scryfall's powerful query syntax
+- 🖼️ **Image Download**: Download and store card images in multiple variants
+- 📊 **Graph Database**: Store card metadata and relationships in Neo4j
+- 🚀 **MCP Integration**: Full Model Context Protocol support for LLM integration
+- ⚡ **Rate Limiting**: Respect Scryfall's API rate limits automatically
+- 🔄 **Caching**: Intelligent caching to avoid duplicate downloads
+- 📈 **Analytics**: Database statistics and usage metrics
 
 ## Installation
 
-Install dependencies:
+### Prerequisites
 
-```bash
-npm install
-```
+- Node.js >= 18.0.0
+- Neo4j database (local or remote)
+- npm or yarn package manager
 
-Build the project:
+### Quick Start
 
-```bash
-npm run build
-```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/scryfall-mcp.git
+   cd scryfall-mcp
+   ```
 
-Install globally (optional):
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-```bash
-npm install -g .
-```
+3. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Neo4j credentials
+   ```
 
-## Quick Start
+4. **Build the project:**
+   ```bash
+   npm run build
+   ```
 
-### Running the Server
-
-Start the MCP server:
-
-```bash
-npm start
-```
-
-Or in development mode:
-
-```bash
-npm run dev
-```
-
-### CLI Usage
-
-The package includes comprehensive CLI tools:
-
-```bash
-# Initialize database
-scryfall-mcp db init
-
-# Search for cards
-scryfall-mcp search cards "lightning bolt"
-
-# Download cards interactively
-scryfall-mcp search download "t:creature c:red"
-
-# Database operations
-scryfall-mcp bulk verify
-scryfall-mcp bulk report
-```
-
-### Basic Usage
-
-The server provides several tools that can be used by MCP clients:
-
-#### Search for Cards
-
-```javascript
-// Search for Lightning Bolt cards
-result = await mcp_search_cards("lightning bolt")
-
-// Search for red creatures with converted mana cost 3
-result = await mcp_search_cards("t:creature c:red cmc:3")
-
-// Search for cards in a specific set
-result = await mcp_search_cards("set:znr")
-```
-
-#### Download Card Images
-
-```javascript
-// Download a specific card image
-result = await mcp_download_card("Lightning Bolt")
-
-// Download from a specific set
-result = await mcp_download_card("Lightning Bolt", "m10", "146")
-
-// Force re-download
-result = await mcp_download_card("Lightning Bolt", undefined, undefined, true)
-```
-
-#### Download Art Crops
-
-```javascript
-// Download art crop for a card
-result = await mcp_download_art_crop("Lightning Bolt")
-
-// Download art crop from specific printing
-result = await mcp_download_art_crop("Lightning Bolt", "m10", "146")
-```
-
-#### Batch Operations
-
-```javascript
-// Download multiple cards
-result = await mcp_batch_download(["Lightning Bolt", "Counterspell", "Giant Growth"])
-
-// Download art crops for multiple cards
-result = await mcp_batch_download_art_crops(["Lightning Bolt", "Counterspell"])
-```
-
-## Available Tools
-
-### Search Tools
-
-- **`mcp_search_cards(query)`**: Search for cards using Scryfall syntax
-- **`mcp_get_card_artwork(card_id)`**: Get artwork URLs for a specific card
-- **`mcp_get_card_artwork_by_name(card_name, set_code?)`**: Get artwork URLs by card name
-- **`mcp_get_random_card_artwork()`**: Get artwork for a random card
-- **`mcp_get_card_image_urls(card_id)`**: Get all image URLs for a card
-
-### Download Tools
-
-- **`mcp_download_card(card_name, set_code?, collector_number?, force?)`**: Download high-resolution card images
-- **`mcp_download_art_crop(card_name, set_code?, collector_number?, force?)`**: Download art crop images
-- **`mcp_batch_download(card_names, set_code?, force?)`**: Download multiple card images
-- **`mcp_batch_download_art_crops(card_names, set_code?, force?)`**: Download multiple art crops
-
-### Database Tools
-
-- **`mcp_verify_database()`**: Verify database integrity and check for missing files
-- **`mcp_scan_directory()`**: Scan directories for image files and add to database
-- **`mcp_clean_database()`**: Clean database of missing file references
-- **`mcp_database_report()`**: Generate comprehensive database report
-- **`mcp_get_card_info(card_name, set_code?)`**: Get card info from local database
-- **`mcp_search_database(query)`**: Search local database for cards
-- **`mcp_remove_card(card_name, set_code?)`**: Remove card from database
-- **`mcp_get_database_stats()`**: Get database statistics
-
-## Available Resources
-
-### Card Resources
-
-- **`scryfall://cards/by-id/{card_id}`**: Get detailed card information by Scryfall ID
-- **`scryfall://cards/by-name/{card_name}`**: Get detailed card information by name
-- **`scryfall://cards/by-set/{set_code}/{collector_number}`**: Get card by set and number
-- **`scryfall://cards/random`**: Get a random Magic: The Gathering card
-- **`scryfall://cards/search?q={query}`**: Search for cards
-- **`scryfall://cards/autocomplete?q={query}`**: Get card name suggestions
-- **`scryfall://cards/{card_id}/prints`**: Get all printings of a card
-- **`scryfall://cards/{card_id}/rulings`**: Get rulings for a card
-
-### Database Resources
-
-- **`database://stats`**: Get database statistics and information
-- **`database://report`**: Get comprehensive database report
-- **`database://cards/by-name/{card_name}`**: Get card info from local database
-- **`database://cards/search?q={query}`**: Search local database for cards
-- **`database://cards/by-set/{set_code}`**: Get all cards in a set from database
-- **`database://cards/all`**: Get all cards from local database
-
-## Search Syntax
-
-The server supports Scryfall's powerful search syntax. Here are some examples:
-
-| Query | Description |
-|-------|-------------|
-| `lightning bolt` | Cards with "lightning bolt" in the name |
-| `t:creature` | All creature cards |
-| `c:red` | All red cards |
-| `cmc:3` | Cards with converted mana cost 3 |
-| `set:znr` | Cards from Zendikar Rising |
-| `r:mythic` | Mythic rare cards |
-| `pow>=4` | Creatures with power 4 or greater |
-| `o:"draw a card"` | Cards with "draw a card" in rules text |
-| `is:commander` | Cards that can be commanders |
-| `year:2023` | Cards printed in 2023 |
-
-<details>
-<summary>Advanced Search Examples</summary>
-
-```javascript
-// Find all red creatures with power 4 or greater from recent sets
-await mcp_search_cards("t:creature c:red pow>=4 year>=2020")
-
-// Find all planeswalkers that cost 3 mana
-await mcp_search_cards("t:planeswalker cmc:3")
-
-// Find all cards with "flying" and "vigilance"
-await mcp_search_cards("o:flying o:vigilance")
-
-// Find all legendary creatures that can be commanders
-await mcp_search_cards("t:legendary t:creature is:commander")
-
-// Find all cards illustrated by a specific artist
-await mcp_search_cards("a:\"Rebecca Guay\"")
-```
-
-</details>
+5. **Start the server:**
+   ```bash
+   npm start
+   ```
 
 ## Configuration
 
-The server uses the following default directories:
+Create a `.env` file from the example template:
 
-- **Card Images**: `~/.scryfall_mcp/card_images/`
-- **Art Crops**: `~/.local/scryfall_images/`
-- **Database**: `~/.local/scryfall_db.sqlite`
+```env
+# Neo4j Database Configuration
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=your-password-here
 
-Configuration can be customized by modifying the `CONFIG` object in `src/config.ts`.
+# Image Storage Configuration
+IMAGE_STORAGE_PATH=./images
 
-## Error Handling
+# Scryfall API Configuration
+SCRYFALL_RATE_LIMIT=10
+SCRYFALL_REQUEST_DELAY=100
 
-All tools return structured responses with status indicators:
+# Logging Configuration
+LOG_LEVEL=info
+```
 
-```typescript
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NEO4J_URI` | Yes | `bolt://localhost:7687` | Neo4j connection URI |
+| `NEO4J_USERNAME` | Yes | `neo4j` | Neo4j username |
+| `NEO4J_PASSWORD` | Yes | - | Neo4j password |
+| `IMAGE_STORAGE_PATH` | No | `./images` | Directory for downloaded images |
+| `SCRYFALL_RATE_LIMIT` | No | `10` | Requests per second limit |
+| `SCRYFALL_REQUEST_DELAY` | No | `100` | Delay between requests (ms) |
+| `LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
+
+## Usage
+
+### MCP Tools
+
+The server provides several tools for LLM integration:
+
+#### search_cards
+Search for Magic: The Gathering cards using Scryfall's query syntax.
+
+```json
 {
-    "status": "success" | "error",
-    "message": "Description of result or error",
-    "data": {...}  // Additional response data
+  "name": "search_cards",
+  "arguments": {
+    "query": "Black Lotus",
+    "unique": "prints",
+    "order": "released"
+  }
 }
 ```
 
-## Requirements
+#### download_card_image
+Download and store card images locally with metadata tracking.
 
-- Node.js 18.0+
-- TypeScript 5.3+
-- SQLite3 (via better-sqlite3)
+```json
+{
+  "name": "download_card_image",
+  "arguments": {
+    "cardId": "550c74d4-1fcb-406a-b02a-639a760a4380",
+    "variant": "art_crop"
+  }
+}
+```
+
+#### list_downloaded_cards
+List cards that have been downloaded and stored locally.
+
+```json
+{
+  "name": "list_downloaded_cards",
+  "arguments": {
+    "set": "lea",
+    "limit": 50
+  }
+}
+```
+
+### Image Variants
+
+Available image variants for download:
+
+- `small`: Small thumbnail (~146×204)
+- `normal`: Standard size (~488×680)  
+- `large`: Large size (~672×936)
+- `png`: High-resolution PNG
+- `art_crop`: Art only, cropped
+- `border_crop`: Full card with border
+
+### Search Query Examples
+
+The server supports Scryfall's full search syntax:
+
+```
+# Basic searches
+"Lightning Bolt"
+"set:lea rarity:rare"
+"cmc:0 t:artifact"
+
+# Advanced searches  
+"c:blue t:creature pow>=4"
+"artist:\"Christopher Rush\""
+"year:1993 reserved:true"
+```
 
 ## Development
 
-### Setting up Development Environment
+### Project Structure
 
-```bash
-git clone https://github.com/kaminaduck/scryfall-mcp.git
-cd scryfall-mcp
-npm install
+```
+src/
+├── config/          # Configuration management
+├── mcp/            # MCP server implementation
+│   ├── server.ts   # Main MCP server
+│   ├── tools.ts    # Tool definitions
+│   └── resources.ts # Resource definitions
+├── services/       # Core services
+│   ├── scryfall-client.ts    # Scryfall API client
+│   ├── image-downloader.ts   # Image download service
+│   └── graph-service.ts      # Neo4j database service
+├── types/          # TypeScript type definitions
+├── utils/          # Utility functions
+└── index.ts        # Application entry point
 ```
 
-### Running Tests
+### Scripts
 
 ```bash
+# Development
+npm run dev          # Start with hot reload
+npm run build        # Build TypeScript
+npm run typecheck    # Type checking only
+
+# Testing
+npm test             # Run tests
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage # Run tests with coverage
+
+# Code Quality
+npm run lint         # Run ESLint
+npm run lint:fix     # Fix ESLint issues
+```
+
+### Building from Source
+
+1. **Clone and install:**
+   ```bash
+   git clone https://github.com/yourusername/scryfall-mcp.git
+   cd scryfall-mcp
+   npm install
+   ```
+
+2. **Set up Neo4j:**
+   ```bash
+   # Using Docker
+   docker run -d \
+     --name neo4j \
+     -p 7474:7474 -p 7687:7687 \
+     -e NEO4J_AUTH=neo4j/yourpassword \
+     neo4j:latest
+   ```
+
+3. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+4. **Build and run:**
+   ```bash
+   npm run build
+   npm start
+   ```
+
+## API Documentation
+
+### Tools
+
+For detailed information about available tools and their parameters, see [API Usage Documentation](./docs/api-usage.md).
+
+### Graph Schema
+
+For information about the Neo4j graph database schema, see [Graph Schema Documentation](./docs/graph-schema.md).
+
+### Resources
+
+The server provides the following MCP resources:
+
+- `card://[id]` - Individual card data
+- `set://[code]` - Set information  
+- `collection://downloaded` - Downloaded cards collection
+- `collection://images` - Downloaded images collection
+- `stats://database` - Database statistics
+
+## Testing
+
+The project includes comprehensive test coverage:
+
+```bash
+# Run all tests
 npm test
+
+# Run specific test suites
+npm test -- services/scryfall-client.test.ts
+npm test -- mcp/tools.test.ts
+
+# Generate coverage report
+npm run test:coverage
 ```
 
-### Code Style
+### Test Structure
 
-```bash
-npm run lint
-npm run typecheck
+```
+test/
+├── services/       # Service layer tests
+│   ├── scryfall-client.test.ts
+│   └── graph-service.test.ts
+└── mcp/           # MCP layer tests
+    └── tools.test.ts
 ```
 
-This project follows TypeScript best practices and includes comprehensive type definitions throughout the codebase.
+## Troubleshooting
 
-## API Reference
+### Common Issues
 
-### Tool Signatures
+**Neo4j Connection Failed**
+- Verify Neo4j is running on the specified port
+- Check username/password in `.env` file
+- Ensure Neo4j accepts connections from your host
 
-```typescript
-function mcp_search_cards(query: string): Promise<ToolResponse>
-function mcp_download_card(
-  card_name: string, 
-  set_code?: string, 
-  collector_number?: string, 
-  force?: boolean
-): Promise<ToolResponse>
-function mcp_download_art_crop(
-  card_name: string, 
-  set_code?: string, 
-  collector_number?: string, 
-  force?: boolean
-): Promise<ToolResponse>
-function mcp_batch_download(
-  card_names: string[], 
-  set_code?: string, 
-  force?: boolean
-): Promise<ToolResponse>
-function mcp_get_card_artwork(card_id: string): Promise<ToolResponse>
-function mcp_verify_database(): Promise<ToolResponse>
-function mcp_scan_directory(): Promise<ToolResponse>
-function mcp_clean_database(): Promise<ToolResponse>
-function mcp_database_report(): Promise<ToolResponse>
-```
+**Image Download Failures**
+- Check internet connectivity
+- Verify Scryfall API is accessible
+- Ensure sufficient disk space in image directory
 
-### CLI Commands
+**Rate Limiting Errors**
+- The server automatically handles Scryfall's rate limits
+- If you encounter persistent rate limiting, try reducing `SCRYFALL_RATE_LIMIT`
 
-```bash
-# Database operations
-scryfall-mcp db init                    # Initialize database
-scryfall-mcp db list [--set <code>]     # List cards in database
-scryfall-mcp db search <query>          # Search database
-scryfall-mcp db stats                   # Show database statistics
-scryfall-mcp db info <card_name>        # Get card information
+**Memory Issues with Large Images**
+- PNG images can be very large (>10MB each)
+- Monitor disk space usage
+- Consider using smaller variants for bulk operations
 
-# Bulk operations  
-scryfall-mcp bulk verify [--verbose]    # Verify database integrity
-scryfall-mcp bulk scan [--verbose]      # Scan directories for images
-scryfall-mcp bulk clean [--yes]         # Clean missing records
-scryfall-mcp bulk report [--verbose]    # Generate comprehensive report
+### Performance Optimization
 
-# Search and download
-scryfall-mcp search cards <query>       # Search for cards
-scryfall-mcp search download <query>    # Interactive download
-scryfall-mcp search random [--download] # Get random card
+1. **Use appropriate image variants** for your use case
+2. **Configure Neo4j memory settings** for your dataset size
+3. **Monitor database performance** using the `get_database_stats` tool
+4. **Use batch operations** when downloading multiple images
+5. **Regular maintenance** of the Neo4j database
+
+### Logging
+
+Adjust log levels in your `.env` file:
+
+```env
+LOG_LEVEL=debug  # For detailed debugging
+LOG_LEVEL=info   # For standard operation
+LOG_LEVEL=warn   # For warnings only
+LOG_LEVEL=error  # For errors only
 ```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass (`npm test`)
+6. Run linting (`npm run lint`)
+7. Commit your changes (`git commit -m 'Add amazing feature'`)
+8. Push to the branch (`git push origin feature/amazing-feature`)
+9. Open a Pull Request
 
-## Migration from Python Version
+### Code Style
 
-If you're upgrading from the Python version of this MCP server:
-
-1. **Database Compatibility**: The SQLite database schema is fully compatible. Your existing card downloads and database will work without changes.
-
-2. **Configuration**: Update paths in your MCP client configuration to point to the new Node.js binary.
-
-3. **Performance**: The Node.js version provides better performance for concurrent operations and native fetch support.
-
-4. **New Features**: Take advantage of new batch download capabilities and enhanced CLI tools.
+- Follow TypeScript best practices
+- Use ESLint configuration provided
+- Write tests for new features
+- Update documentation as needed
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [Scryfall](https://scryfall.com/) for providing the comprehensive Magic: The Gathering API
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the standardized interface
-- The Magic: The Gathering community for their continued support
+- [Scryfall](https://scryfall.com/) for providing the excellent MTG API
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the MCP specification
+- [Neo4j](https://neo4j.com/) for the graph database technology
+- The Magic: The Gathering community for inspiration
 
-## Support
+## Links
 
-If you encounter any issues or have questions:
-
-1. Check the [Issues](https://github.com/kaminaduck/scryfall-mcp/issues) page
-2. Create a new issue with detailed information about your problem
-3. Include relevant error messages and system information
-
----
-
-**Note**: This is an unofficial tool and is not affiliated with Wizards of the Coast or Scryfall. Magic: The Gathering is a trademark of Wizards of the Coast LLC.
+- [Scryfall API Documentation](https://scryfall.com/docs/api)
+- [Model Context Protocol Specification](https://spec.modelcontextprotocol.io/)
+- [Neo4j Documentation](https://neo4j.com/docs/)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)

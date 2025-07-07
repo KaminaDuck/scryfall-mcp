@@ -128,3 +128,16 @@ Thumbs.db
 .local/
 .json/
 .clinerules
+
+# Downloaded images
+images/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
