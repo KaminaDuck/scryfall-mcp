@@ -19,6 +19,7 @@ import logging
 import os
 import sys
 import json
+from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
 
 # Add the parent directory to the path so we can import our modules
@@ -32,6 +33,8 @@ from scryfall_art_download import download_art_crops
 from scryfall_search import search_cards, group_cards_by_name_and_art
 from db_manager import CardDatabase
 from db_bulk_operations import verify_database_integrity, scan_directory_for_images, clean_database
+from config import get_storage_directory, is_mcp_mode
+from file_manager import FileManager
 
 # Configure logging
 logging.basicConfig(
@@ -123,37 +126,49 @@ def mcp_download_card(card_name: str, set_code: Optional[str] = None, collector_
         set_codes = [set_code] if set_code else None
         collector_numbers = [collector_number] if collector_number else None
         
+        # Get the appropriate storage directory (always provide a valid path for MCP mode)
+        base_dir = get_storage_directory()
+        
         # Download the card image
-        download_card_images(
+        downloaded_files = download_card_images(
             [card_name],
             force_download=force_download,
             set_codes=set_codes,
-            collector_numbers=collector_numbers
+            collector_numbers=collector_numbers,
+            base_dir=base_dir
         )
         
-        # Determine the filename based on the parameters
-        card_name_for_filename = card_name.replace(" ", "_").replace("//", "_")
-        if set_code and collector_number:
-            image_filename = f"{card_name_for_filename}_{set_code}_{collector_number}.jpg"
-        else:
-            image_filename = f"{card_name_for_filename}.jpg"
-        
-        image_filepath = os.path.join(".local/scryfall_card_images", image_filename)
-        
-        # Check if the file exists
-        if os.path.exists(image_filepath):
-            return {
+        if downloaded_files:
+            # Get the file path and register it for resource serving
+            file_path = downloaded_files[0][1]
+            
+            # Get file_id from database
+            card_version_id = f"{card_name}"
+            if set_code and collector_number:
+                card_version_id = f"{card_name}_{set_code}_{collector_number}"
+            
+            with CardDatabase() as db:
+                card_info = db.get_card_info(card_version_id)
+                file_id = card_info['file_id'] if card_info else None
+            
+            result = {
                 "status": "success",
                 "message": f"Card '{card_name}' downloaded successfully",
-                "filepath": image_filepath,
+                "filepath": file_path,
                 "card_name": card_name,
                 "set_code": set_code,
                 "collector_number": collector_number
             }
+            
+            # Add resource URI if we have a file_id
+            if file_id:
+                result["resource_uri"] = f"resource://download/card/{file_id}"
+            
+            return result
         else:
             return {
                 "status": "error",
-                "message": f"Failed to download card '{card_name}'. File not found after download attempt."
+                "message": f"Failed to download card '{card_name}'."
             }
     
     except Exception as e:
@@ -181,12 +196,16 @@ def mcp_download_art_crop(card_name: str, set_code: Optional[str] = None, collec
         set_codes = [set_code] if set_code else None
         collector_numbers = [collector_number] if collector_number else None
         
+        # Get the appropriate storage directory (always provide a valid path for MCP mode)
+        base_dir = get_storage_directory()
+        
         # Download the art crop
-        download_art_crops(
+        downloaded_files = download_art_crops(
             [card_name],
             force_download=force_download,
             set_codes=set_codes,
-            collector_numbers=collector_numbers
+            collector_numbers=collector_numbers,
+            base_dir=base_dir
         )
         
         # Create a unique identifier for the card version
@@ -194,24 +213,37 @@ def mcp_download_art_crop(card_name: str, set_code: Optional[str] = None, collec
         if set_code and collector_number:
             card_version_id = f"{card_name}_{set_code}_{collector_number}_art_crop"
         
-        # Check if the card exists in the database
-        with CardDatabase() as db:
-            card_info = db.get_card_info(card_version_id)
+        if downloaded_files:
+            # Get the file paths
+            image_path = downloaded_files[0][1]
+            json_path = downloaded_files[0][2] if len(downloaded_files[0]) > 2 else None
             
-            if card_info:
-                return {
-                    "status": "success",
-                    "message": f"Art crop for '{card_name}' downloaded successfully",
-                    "filepath": card_info['filename'],
-                    "card_name": card_name,
-                    "set_code": set_code,
-                    "collector_number": collector_number
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to download art crop for '{card_name}'. Not found in database after download attempt."
-                }
+            # Get file_id from database
+            with CardDatabase() as db:
+                card_info = db.get_card_info(card_version_id)
+                file_id = card_info['file_id'] if card_info else None
+            
+            result = {
+                "status": "success",
+                "message": f"Art crop for '{card_name}' downloaded successfully",
+                "filepath": image_path,
+                "card_name": card_name,
+                "set_code": set_code,
+                "collector_number": collector_number
+            }
+            
+            # Add resource URIs if we have file_id
+            if file_id:
+                result["resource_uri"] = f"resource://download/art/{file_id}"
+                if json_path:
+                    result["metadata_uri"] = f"resource://download/metadata/{file_id}"
+            
+            return result
+        else:
+            return {
+                "status": "error",
+                "message": f"Failed to download art crop for '{card_name}'."
+            }
     
     except Exception as e:
         logger.error(f"[Error] Failed to download art crop: {str(e)}")
@@ -540,6 +572,104 @@ def database_stats() -> Tuple[str, str]:
     except Exception as e:
         logger.error(f"[Error] Failed to get database stats: {str(e)}")
         return json.dumps({"status": "error", "message": str(e)}), "application/json"
+
+@server.resource(uri="resource://download/card/{file_id}")
+def serve_card_image(file_id: str) -> Tuple[bytes, str]:
+    """
+    Serve a downloaded card image by file ID.
+    
+    Args:
+        file_id: The unique file ID
+        
+    Returns:
+        The image file content and MIME type
+    """
+    logger.info(f"[Resource] Serving card image for file ID: {file_id}")
+    
+    try:
+        with FileManager() as fm:
+            result = fm.read_file_content(file_id)
+            if result:
+                content, mime_type = result
+                return content, mime_type
+            else:
+                error_msg = {"status": "error", "message": f"File not found for ID: {file_id}"}
+                return json.dumps(error_msg).encode(), "application/json"
+    
+    except Exception as e:
+        logger.error(f"[Error] Failed to serve card image: {str(e)}")
+        error_msg = {"status": "error", "message": str(e)}
+        return json.dumps(error_msg).encode(), "application/json"
+
+@server.resource(uri="resource://download/art/{file_id}")
+def serve_art_crop(file_id: str) -> Tuple[bytes, str]:
+    """
+    Serve a downloaded art crop image by file ID.
+    
+    Args:
+        file_id: The unique file ID
+        
+    Returns:
+        The image file content and MIME type
+    """
+    logger.info(f"[Resource] Serving art crop for file ID: {file_id}")
+    
+    try:
+        with FileManager() as fm:
+            result = fm.read_file_content(file_id)
+            if result:
+                content, mime_type = result
+                return content, mime_type
+            else:
+                error_msg = {"status": "error", "message": f"File not found for ID: {file_id}"}
+                return json.dumps(error_msg).encode(), "application/json"
+    
+    except Exception as e:
+        logger.error(f"[Error] Failed to serve art crop: {str(e)}")
+        error_msg = {"status": "error", "message": str(e)}
+        return json.dumps(error_msg).encode(), "application/json"
+
+@server.resource(uri="resource://download/metadata/{file_id}")
+def serve_metadata(file_id: str) -> Tuple[str, str]:
+    """
+    Serve metadata JSON file for a downloaded card.
+    
+    Args:
+        file_id: The unique file ID
+        
+    Returns:
+        The JSON metadata and MIME type
+    """
+    logger.info(f"[Resource] Serving metadata for file ID: {file_id}")
+    
+    try:
+        with FileManager() as fm:
+            # Get the card info to find the JSON file
+            info = fm.get_resource_info(file_id)
+            if not info:
+                error_msg = {"status": "error", "message": f"Metadata not found for ID: {file_id}"}
+                return json.dumps(error_msg), "application/json"
+            
+            # For art crops, JSON files are stored alongside the images
+            # We need to find the corresponding JSON file
+            with CardDatabase() as db:
+                card_info = db.get_card_by_file_id(file_id)
+                if card_info and '_art_crop' in card_info['card_name']:
+                    # This is an art crop, try to find the JSON file
+                    image_path = Path(card_info['filename'])
+                    json_path = image_path.with_suffix('.json')
+                    
+                    if json_path.exists():
+                        with open(json_path, 'r') as f:
+                            return f.read(), "application/json"
+            
+            error_msg = {"status": "error", "message": f"Metadata file not found for ID: {file_id}"}
+            return json.dumps(error_msg), "application/json"
+    
+    except Exception as e:
+        logger.error(f"[Error] Failed to serve metadata: {str(e)}")
+        error_msg = {"status": "error", "message": str(e)}
+        return json.dumps(error_msg), "application/json"
 
 if __name__ == "__main__":
     logger.info("[Setup] Starting Scryfall MCP server...")

@@ -39,7 +39,7 @@ pip install -e .
 Start the MCP server:
 
 ```bash
-python -m mcp
+python -m scryfall_mcp
 ```
 
 Or run directly:
@@ -99,7 +99,9 @@ result = mcp_download_art_crop("Lightning Bolt", set_code="m10", collector_numbe
 ### Download Tools
 
 - **`mcp_download_card(card_name, set_code?, collector_number?, force_download?)`**: Download high-resolution card images
+  - Returns: `filepath`, `resource_uri` for accessing the downloaded image
 - **`mcp_download_art_crop(card_name, set_code?, collector_number?, force_download?)`**: Download art crop images
+  - Returns: `filepath`, `resource_uri` for the image, `metadata_uri` for JSON data
 
 ### Database Tools
 
@@ -115,6 +117,12 @@ result = mcp_download_art_crop("Lightning Bolt", set_code="m10", collector_numbe
 - **`resource://card/{card_id}`**: Get detailed card information by Scryfall ID
 - **`resource://card/name/{card_name}`**: Get detailed card information by name
 - **`resource://random_card`**: Get a random Magic: The Gathering card
+
+### Download Resources (NEW)
+
+- **`resource://download/card/{file_id}`**: Access downloaded card images
+- **`resource://download/art/{file_id}`**: Access downloaded art crop images
+- **`resource://download/metadata/{file_id}`**: Access JSON metadata for downloaded cards
 
 ### Database Resources
 
@@ -161,11 +169,42 @@ mcp_search_cards("a:\"Rebecca Guay\"")
 
 ## Configuration
 
-The server uses the following default directories:
+### File Storage
 
-- **Card Images**: `.local/scryfall_card_images/`
-- **Art Crops**: `.local/scryfall_images/`
-- **Database**: Local SQLite database for tracking downloads
+The server adapts its storage location based on the execution environment:
+
+**MCP Mode** (when running as MCP server):
+- Uses system temp directory or XDG cache directory
+- Default: `/tmp/scryfall_downloads/` or `$XDG_CACHE_HOME/scryfall_mcp/`
+- Configurable via `SCRYFALL_DATA_DIR` environment variable
+
+**Standalone Mode** (when running scripts directly):
+- Uses traditional home directory storage
+- Card Images: `.local/scryfall_card_images/`
+- Art Crops: `.local/scryfall_images/`
+- Database: `.local/scryfall_database.db`
+
+### Environment Variables
+
+- **`SCRYFALL_DATA_DIR`**: Override the default storage directory
+- **`MCP_ENABLE_FILE_DOWNLOADS`**: Enable file download functionality in MCP mode
+
+### MCP Configuration (settings.json)
+
+```json
+{
+  "mcpServers": {
+    "scryfall-server": {
+      "command": "python",
+      "args": ["-m", "scryfall_mcp"],
+      "env": {
+        "SCRYFALL_DATA_DIR": "/tmp/scryfall_downloads",
+        "MCP_ENABLE_FILE_DOWNLOADS": "true"
+      }
+    }
+  }
+}
+```
 
 ## Error Handling
 

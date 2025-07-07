@@ -17,16 +17,19 @@ import httpx
 import os
 import time
 import json
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Tuple
 from db_manager import CardDatabase
+from config import get_art_crops_directory
 
 
 def download_art_crops(
     card_names: List[str], 
     force_download: bool = False,
     set_codes: Optional[List[str]] = None,
-    collector_numbers: Optional[List[str]] = None
-) -> None:
+    collector_numbers: Optional[List[str]] = None,
+    base_dir: Optional[Path] = None
+) -> List[Tuple[str, str, str]]:
     """
     Download art crop images for specific cards.
     
@@ -35,6 +38,10 @@ def download_art_crops(
         force_download: If True, download even if the card already exists in database
         set_codes: Optional list of set codes to specify exact printings
         collector_numbers: Optional list of collector numbers to specify exact printings
+        base_dir: Optional base directory for downloads (defaults to config directory)
+    
+    Returns:
+        List of tuples containing (card_name, image_path, json_path) for downloaded files
     """
     # Initialize set_codes and collector_numbers if not provided
     if set_codes is None:
@@ -46,11 +53,18 @@ def download_art_crops(
     downloaded_count = 0
     skipped_count = 0
     error_count = 0
+    downloaded_files = []
     
     print(f"Processing {total_cards} cards for art crop download...")
     
-    output_folder = ".local/scryfall_images"
-    os.makedirs(output_folder, exist_ok=True)
+    # Use provided base_dir or get from config
+    if base_dir is None:
+        output_folder = get_art_crops_directory()
+    else:
+        output_folder = Path(base_dir) / "scryfall_images"
+        output_folder.mkdir(parents=True, exist_ok=True)
+    
+    output_folder_str = str(output_folder)
     
     # Initialize the database
     with CardDatabase() as db:
@@ -90,7 +104,7 @@ def download_art_crops(
                     if art_crop_url:
                         # Create a folder for the set
                         set_name = card_data.get("set_name", "unknown_set").replace(" ", "_").replace(":", "_")
-                        set_folder = os.path.join(output_folder, set_name)
+                        set_folder = os.path.join(output_folder_str, set_name)
                         os.makedirs(set_folder, exist_ok=True)
                         
                         # Prepare the filename
@@ -131,6 +145,8 @@ def download_art_crops(
                         json_filepath = os.path.join(set_folder, json_filename)
                         with open(json_filepath, 'w', encoding='utf-8') as json_file:
                             json.dump(card_data, json_file, indent=4)
+                        
+                        downloaded_files.append((card_name, image_filepath, json_filepath))
                     else:
                         print(f"[{index}/{total_cards}] No art crop found for '{card_name}'.")
                         error_count += 1
@@ -148,6 +164,8 @@ def download_art_crops(
     print(f"Art crops downloaded: {downloaded_count}")
     print(f"Art crops skipped (already existed): {skipped_count}")
     print(f"Errors encountered: {error_count}")
+    
+    return downloaded_files
 
 
 if __name__ == "__main__":

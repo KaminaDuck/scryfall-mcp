@@ -3,10 +3,13 @@ import os
 import time
 import argparse
 import json
+from pathlib import Path
+from typing import Optional, List, Tuple
 from db_manager import CardDatabase
+from config import get_card_images_directory
 
 
-def download_card_images(card_names, force_download=False, set_codes=None, collector_numbers=None):
+def download_card_images(card_names, force_download=False, set_codes=None, collector_numbers=None, base_dir: Optional[Path] = None) -> List[Tuple[str, str]]:
     """
     Downloads 'large' images for a list of card names from Scryfall.
     Tracks progress and provides a summary at the end.
@@ -17,6 +20,10 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
         force_download: Whether to force download even if card exists in database
         set_codes: Optional list of set codes corresponding to card_names
         collector_numbers: Optional list of collector numbers corresponding to card_names
+        base_dir: Optional base directory for downloads (defaults to config directory)
+    
+    Returns:
+        List of tuples containing (card_name, file_path) for downloaded files
     """
     # Initialize set_codes and collector_numbers if not provided
     if set_codes is None:
@@ -27,11 +34,18 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
     downloaded_count = 0
     skipped_count = 0
     error_count = 0
+    downloaded_files = []
     
     print(f"Processing {total_cards} cards...")
     
-    output_folder = ".local/scryfall_card_images"
-    os.makedirs(output_folder, exist_ok=True)
+    # Use provided base_dir or get from config
+    if base_dir is None:
+        output_folder = get_card_images_directory()
+    else:
+        output_folder = Path(base_dir) / "scryfall_card_images"
+        output_folder.mkdir(parents=True, exist_ok=True)
+    
+    output_folder_str = str(output_folder)
     
     # Initialize the database
     with CardDatabase() as db:
@@ -79,7 +93,7 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
                                 image_filename = f"{card_name_for_filename}_{set_code}_{collector_number}{image_extension}"
                             else:
                                 image_filename = f"{card_name_for_filename}{image_extension}"
-                            image_filepath = os.path.join(output_folder, image_filename)
+                            image_filepath = os.path.join(output_folder_str, image_filename)
                             
                             print(f"[{index}/{total_cards}] Downloading large image for '{card_name}'...")
                             image_response = client.get(large_image_url)
@@ -98,6 +112,7 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
                                 image_url=large_image_url
                             )
                             downloaded_count += 1
+                            downloaded_files.append((card_name, image_filepath))
                         else:
                             print(f"[{index}/{total_cards}] No large image found for '{card_name}'.")
                             error_count += 1
@@ -115,6 +130,8 @@ def download_card_images(card_names, force_download=False, set_codes=None, colle
     print(f"Images downloaded: {downloaded_count}")
     print(f"Images skipped (already existed): {skipped_count}")
     print(f"Errors encountered: {error_count}")
+    
+    return downloaded_files
 
 
 if __name__ == "__main__":
