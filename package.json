@@ -1,24 +1,32 @@
 {
   "name": "@kaminaduck/scryfall-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "description": "A Model Context Protocol (MCP) server that provides access to the Scryfall API for Magic: The Gathering card data",
   "type": "module",
   "main": "dist/index.js",
   "exports": "./dist/index.js",
   "bin": {
-    "scryfall-mcp-server": "dist/index.js"
+    "scryfall-mcp-server": "dist/index.js",
+    "scryfall-mcp-server-windows": "src/windowsWrapper.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
+    "build:watch": "tsc --watch",
     "dev": "ts-node src/index.ts",
+    "debug": "node --inspect dist/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:mcp": "node dist/index.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts",
     "prepare": "npm run build",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test:windows": "jest tests/windows-env.test.ts",
+    "setup:windows": "powershell -ExecutionPolicy Bypass -File scripts/setup-windows.ps1",
+    "test:env:windows": "powershell -ExecutionPolicy Bypass -File scripts/test-env-windows.ps1",
+    "test:wrapper": "node src/windowsWrapper.js --test"
   },
   "keywords": [
     "mcp",
@@ -45,8 +53,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.4.0",
     "better-sqlite3": "^9.2.2",
-    "node-fetch": "^3.3.2",
     "mime-types": "^2.1.35",
+    "node-fetch": "^3.3.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
@@ -69,6 +77,10 @@
   },
   "files": [
     "dist/**/*",
+    "src/windowsWrapper.js",
+    "scripts/*.ps1",
+    "scripts/*.bat",
+    "docs/*.md",
     "README.md",
     "LICENSE"
   ]

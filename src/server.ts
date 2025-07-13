@@ -7,6 +7,7 @@ import {
   CallToolRequestSchema,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
@@ -54,96 +55,98 @@ export const server = new Server({
   }
 });
 
-// Initialize the server with enhanced error handling and validation
-async function initializeServer() {
-  try {
-    logger.info('[Setup] Initializing Scryfall MCP server...');
+// Track whether file operations are available (used for graceful degradation)
+let fileOperationsAvailable = false;
+
+// Initialize the server with resilient error handling and graceful degradation
+export async function initializeServer() {
+  logger.info('[Setup] Initializing Scryfall MCP server...');
+  
+  // Enhanced pre-startup checks with graceful degradation
+  if (isMcpMode()) {
+    logger.info('[Setup] Running in MCP mode - performing storage validation');
     
-    // Enhanced pre-startup checks
-    if (isMcpMode()) {
-      logger.info('[Setup] Running in MCP mode - performing storage validation');
-      
-      // Validate storage directory with detailed error handling
-      let storageDir: string;
-      try {
-        storageDir = await getStorageDirectory();
-        logger.info(`[Setup] Storage directory resolved: ${storageDir}`);
-      } catch (storageError: any) {
-        const errorMsg = `Failed to resolve storage directory: ${storageError.message}`;
-        logger.error(`[Setup] ${errorMsg}`);
-        throw new Error(`Server initialization failed - ${errorMsg}`);
-      }
-      
-      // Verify directory permissions with fallback mechanism
+    // Validate storage directory with graceful degradation
+    let storageDir: string | null = null;
+    try {
+      storageDir = await getStorageDirectory();
+      logger.info(`[Setup] Storage directory resolved: ${storageDir}`);
+    } catch (storageError: any) {
+      logger.warn(`[Setup] Failed to resolve storage directory: ${storageError.message}`);
+      logger.warn('[Setup] File download functionality will be disabled');
+      fileOperationsAvailable = false;
+    }
+    
+    // Verify directory permissions with graceful fallback
+    if (storageDir) {
       try {
         const hasPermissions = await ensureDirectoryPermissions(storageDir);
         if (!hasPermissions) {
-          logger.error(`[Setup] Critical: Cannot write to storage directory: ${storageDir}`);
-          logger.error('[Setup] This will prevent file downloads from working.');
-          logger.error('[Setup] Please ensure the directory exists and is writable, or set SCRYFALL_DATA_DIR to a valid path.');
-          
-          // In MCP mode, this is more critical - consider it an error
-          if (process.env['MCP_ENABLE_FILE_DOWNLOADS'] === 'true') {
-            throw new Error(`Storage directory ${storageDir} is not writable and file downloads are enabled`);
-          } else {
-            logger.warn('[Setup] Continuing without file download capability');
-          }
+          logger.warn(`[Setup] Cannot write to storage directory: ${storageDir}`);
+          logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
+          fileOperationsAvailable = false;
         } else {
           logger.info(`[Setup] Storage directory permissions verified: ${storageDir}`);
+          fileOperationsAvailable = true;
         }
       } catch (permissionError: any) {
-        const errorMsg = `Storage directory permission check failed: ${permissionError.message}`;
-        logger.error(`[Setup] ${errorMsg}`);
-        throw new Error(`Server initialization failed - ${errorMsg}`);
+        logger.warn(`[Setup] Storage directory permission check failed: ${permissionError.message}`);
+        logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
+        fileOperationsAvailable = false;
       }
-      
-      // Verify required subdirectories can be created
+    }
+    
+    // Verify required subdirectories can be created (only if file operations are available)
+    if (fileOperationsAvailable && storageDir) {
       try {
         const cardImagesDir = await getStorageDirectory('scryfall_card_images');
         const artCropsDir = await getStorageDirectory('scryfall_images');
         logger.info(`[Setup] Subdirectories verified: card images (${cardImagesDir}), art crops (${artCropsDir})`);
       } catch (subdirError: any) {
-        const errorMsg = `Failed to create required subdirectories: ${subdirError.message}`;
-        logger.error(`[Setup] ${errorMsg}`);
-        throw new Error(`Server initialization failed - ${errorMsg}`);
+        logger.warn(`[Setup] Failed to create required subdirectories: ${subdirError.message}`);
+        logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
+        fileOperationsAvailable = false;
       }
+    }
+    
+    // Log the final status of file operations
+    if (fileOperationsAvailable) {
+      logger.info('[Setup] ✓ File download functionality is available');
     } else {
-      logger.info('[Setup] Running in standalone mode');
+      logger.info('[Setup] ⚠ File download functionality is disabled - server will provide search and API access only');
     }
-    
-    // Additional system checks
-    try {
-      // Verify Node.js version compatibility
-      const nodeVersion = process.version;
-      const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0] || '0');
-      if (majorVersion < 18) {
-        logger.warn(`[Setup] Warning: Node.js version ${nodeVersion} detected. Version 18+ is recommended.`);
-      } else {
-        logger.info(`[Setup] Node.js version ${nodeVersion} is compatible`);
-      }
-      
-      // Verify required environment variables if in MCP mode
-      if (isMcpMode()) {
-        const requiredEnvVars = ['MCP_SERVER_NAME', 'MCP_ENABLE_FILE_DOWNLOADS'];
-        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-        if (missingVars.length > 0) {
-          logger.info(`[Setup] Optional environment variables not set: ${missingVars.join(', ')}`);
-        }
-      }
-      
-    } catch (systemCheckError: any) {
-      logger.warn(`[Setup] System check warnings: ${systemCheckError.message}`);
-      // Don't fail initialization for system check warnings
-    }
-    
-    logger.info('[Setup] ✓ Scryfall MCP server initialized successfully');
-    logger.info('[Setup] ✓ Ready to handle MCP requests');
-    
-  } catch (error: any) {
-    logger.error(`[Setup] ✗ Server initialization failed: ${error.message || error}`);
-    logger.error('[Setup] Please check the error details above and resolve any issues before retrying');
-    throw new Error(`Scryfall MCP server initialization failed: ${error.message || error}`);
+  } else {
+    logger.info('[Setup] Running in standalone mode');
+    fileOperationsAvailable = true; // Assume file operations work in standalone mode
   }
+  
+  // Additional system checks
+  try {
+    // Verify Node.js version compatibility
+    const nodeVersion = process.version;
+    const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0] || '0');
+    if (majorVersion < 18) {
+      logger.warn(`[Setup] Warning: Node.js version ${nodeVersion} detected. Version 18+ is recommended.`);
+    } else {
+      logger.info(`[Setup] Node.js version ${nodeVersion} is compatible`);
+    }
+    
+    // Verify required environment variables if in MCP mode
+    if (isMcpMode()) {
+      const requiredEnvVars = ['MCP_SERVER_NAME', 'MCP_ENABLE_FILE_DOWNLOADS'];
+      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+      if (missingVars.length > 0) {
+        logger.info(`[Setup] Optional environment variables not set: ${missingVars.join(', ')}`);
+      }
+    }
+    
+  } catch (systemCheckError: any) {
+    logger.warn(`[Setup] System check warnings: ${systemCheckError.message}`);
+    // Don't fail initialization for system check warnings
+  }
+  
+  logger.info('[Setup] ✓ Scryfall MCP server initialized successfully');
+  logger.info('[Setup] ✓ Ready to handle MCP requests');
 }
 
 // Register tools
@@ -404,14 +407,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
-    logger.error(`Error executing tool ${name}:`, error);
+    logger.error(`[Tool] Error executing tool ${name}:`, error);
+    logger.error(`[Tool] Tool arguments:`, args);
+    logger.error(`[Tool] Error details:`, {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown'
+    });
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
             status: 'error',
-            message: error instanceof Error ? error.message : 'Unknown error occurred'
+            message: error instanceof Error ? error.message : 'Unknown error occurred',
+            tool: name
           })
         }
       ],
@@ -562,10 +572,16 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       throw new Error(`Unknown resource: ${uri}`);
     }
   } catch (error) {
-    logger.error(`Error reading resource ${uri}:`, error);
+    logger.error(`[Resource] Error reading resource ${uri}:`, error);
+    logger.error(`[Resource] Error details:`, {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown'
+    });
     const errorResponse = JSON.stringify({
       status: 'error',
-      message: error instanceof Error ? error.message : 'Unknown error occurred'
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
+      resource: uri
     });
     return {
       contents: [
@@ -579,8 +595,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 });
 
-// Initialize server on startup
-initializeServer().catch((error) => {
-  logger.error('[Setup] Failed to initialize server:', error);
-  process.exit(1);
+// Add prompts list handler (server doesn't provide prompts, but handler prevents JSON-RPC errors)
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: []
+  };
 });
