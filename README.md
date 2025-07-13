@@ -1,8 +1,9 @@
 # Scryfall MCP Server
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/pypi/v/scryfall-mcp.svg)](https://pypi.org/project/scryfall-mcp/)
+[![Node.js](https://img.shields.io/badge/node.js-18.0+-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/typescript-5.3+-blue.svg)](https://www.typescriptlang.org/)
+[![npm](https://img.shields.io/npm/v/scryfall-mcp-server.svg)](https://www.npmjs.com/package/scryfall-mcp-server)
 
 A Model Context Protocol (MCP) server that provides access to the Scryfall API for Magic: The Gathering card data. This server enables AI assistants and other MCP clients to search for cards, retrieve card information, download high-resolution images, and access comprehensive MTG data through a standardized interface.
 
@@ -18,10 +19,16 @@ A Model Context Protocol (MCP) server that provides access to the Scryfall API f
 
 ## Installation
 
-Install the package from PyPI:
+Install the package from npm:
 
 ```bash
-pip install scryfall-mcp
+npm install -g scryfall-mcp-server
+```
+
+Or run directly with npx:
+
+```bash
+npx scryfall-mcp-server
 ```
 
 Or install from source:
@@ -29,7 +36,8 @@ Or install from source:
 ```bash
 git clone https://github.com/kaminaduck/scryfall-mcp.git
 cd scryfall-mcp
-pip install -e .
+npm install
+npm run build
 ```
 
 ## Quick Start
@@ -39,14 +47,19 @@ pip install -e .
 Start the MCP server:
 
 ```bash
-python -m scryfall_mcp
+npx scryfall-mcp-server
 ```
 
-Or run directly:
+Or if installed globally:
 
-```python
-from scryfall_mcp import main
-main()
+```bash
+scryfall-mcp-server
+```
+
+For development:
+
+```bash
+npm run dev
 ```
 
 ### Basic Usage
@@ -55,38 +68,38 @@ The server provides several tools that can be used by MCP clients:
 
 #### Search for Cards
 
-```python
-# Search for Lightning Bolt cards
-result = mcp_search_cards("lightning bolt")
+```javascript
+// Search for Lightning Bolt cards
+const result = await mcpSearchCards("lightning bolt");
 
-# Search for red creatures with converted mana cost 3
-result = mcp_search_cards("t:creature c:red cmc:3")
+// Search for red creatures with converted mana cost 3
+const result = await mcpSearchCards("t:creature c:red cmc:3");
 
-# Search for cards in a specific set
-result = mcp_search_cards("set:znr")
+// Search for cards in a specific set
+const result = await mcpSearchCards("set:znr");
 ```
 
 #### Download Card Images
 
-```python
-# Download a specific card image
-result = mcp_download_card("Lightning Bolt")
+```javascript
+// Download a specific card image
+const result = await mcpDownloadCard("Lightning Bolt");
 
-# Download from a specific set
-result = mcp_download_card("Lightning Bolt", set_code="m10", collector_number="146")
+// Download from a specific set
+const result = await mcpDownloadCard("Lightning Bolt", "m10", "146");
 
-# Force re-download
-result = mcp_download_card("Lightning Bolt", force_download=True)
+// Force re-download
+const result = await mcpDownloadCard("Lightning Bolt", undefined, undefined, true);
 ```
 
 #### Download Art Crops
 
-```python
-# Download art crop for a card
-result = mcp_download_art_crop("Lightning Bolt")
+```javascript
+// Download art crop for a card
+const result = await mcpDownloadArtCrop("Lightning Bolt");
 
-# Download art crop from specific printing
-result = mcp_download_art_crop("Lightning Bolt", set_code="m10", collector_number="146")
+// Download art crop from specific printing
+const result = await mcpDownloadArtCrop("Lightning Bolt", "m10", "146");
 ```
 
 ## Available Tools
@@ -148,21 +161,21 @@ The server supports Scryfall's powerful search syntax. Here are some examples:
 <details>
 <summary>Advanced Search Examples</summary>
 
-```python
-# Find all red creatures with power 4 or greater from recent sets
-mcp_search_cards("t:creature c:red pow>=4 year>=2020")
+```javascript
+// Find all red creatures with power 4 or greater from recent sets
+await mcpSearchCards("t:creature c:red pow>=4 year>=2020");
 
-# Find all planeswalkers that cost 3 mana
-mcp_search_cards("t:planeswalker cmc:3")
+// Find all planeswalkers that cost 3 mana
+await mcpSearchCards("t:planeswalker cmc:3");
 
-# Find all cards with "flying" and "vigilance"
-mcp_search_cards("o:flying o:vigilance")
+// Find all cards with "flying" and "vigilance"
+await mcpSearchCards("o:flying o:vigilance");
 
-# Find all legendary creatures that can be commanders
-mcp_search_cards("t:legendary t:creature is:commander")
+// Find all legendary creatures that can be commanders
+await mcpSearchCards("t:legendary t:creature is:commander");
 
-# Find all cards illustrated by a specific artist
-mcp_search_cards("a:\"Rebecca Guay\"")
+// Find all cards illustrated by a specific artist
+await mcpSearchCards("a:\"Rebecca Guay\"");
 ```
 
 </details>
@@ -195,8 +208,24 @@ The server adapts its storage location based on the execution environment:
 {
   "mcpServers": {
     "scryfall-server": {
-      "command": "python",
-      "args": ["-m", "scryfall_mcp"],
+      "command": "npx",
+      "args": ["scryfall-mcp-server"],
+      "env": {
+        "SCRYFALL_DATA_DIR": "/tmp/scryfall_downloads",
+        "MCP_ENABLE_FILE_DOWNLOADS": "true"
+      }
+    }
+  }
+}
+```
+
+Or if installed globally:
+
+```json
+{
+  "mcpServers": {
+    "scryfall-server": {
+      "command": "scryfall-mcp-server",
       "env": {
         "SCRYFALL_DATA_DIR": "/tmp/scryfall_downloads",
         "MCP_ENABLE_FILE_DOWNLOADS": "true"
@@ -210,19 +239,22 @@ The server adapts its storage location based on the execution environment:
 
 All tools return structured responses with status indicators:
 
-```python
-{
-    "status": "success" | "error",
-    "message": "Description of result or error",
-    "data": {...}  # Additional response data
+```typescript
+interface ToolResponse {
+  status: "success" | "error";
+  message?: string;
+  // Additional response data varies by tool
+  [key: string]: any;
 }
 ```
 
 ## Requirements
 
-- Python 3.12+
-- httpx >= 0.28.1
-- mcp[cli] >= 1.8.0
+- Node.js 18.0+
+- TypeScript 5.3+ (for development)
+- @modelcontextprotocol/sdk >= 0.4.0
+
+> **Note**: This package is distributed as an ES module. It requires Node.js 18+ with ES module support.
 
 ## Development
 
@@ -231,36 +263,90 @@ All tools return structured responses with status indicators:
 ```bash
 git clone https://github.com/kaminaduck/scryfall-mcp.git
 cd scryfall-mcp
-pip install -e ".[dev]"
+npm install
+```
+
+### Building the Project
+
+```bash
+npm run build
 ```
 
 ### Running Tests
 
 ```bash
-pytest
+npm test
+```
+
+For watch mode:
+
+```bash
+npm run test:watch
+```
+
+### Code Quality
+
+```bash
+# Lint the code
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+
+# Format code
+npm run format
 ```
 
 ### Code Style
 
-This project follows PEP 8 style guidelines and includes comprehensive docstrings following the project's documentation standards.
+This project follows TypeScript and ESLint best practices with Prettier for consistent formatting. All code includes comprehensive JSDoc documentation.
+
+### Project Configuration
+
+This project uses ES modules (`"type": "module"` in package.json). Configuration files that must use CommonJS are named with `.cjs` extension:
+- `.eslintrc.cjs` - ESLint configuration
+- `jest.config.cjs` - Jest test configuration
+
+The TypeScript configuration uses `NodeNext` module resolution for optimal ES module compatibility.
 
 ## API Reference
 
+### Using as a Library
+
+If you want to use this package programmatically as an ES module:
+
+```javascript
+import { scryfallClient } from 'scryfall-mcp-server/dist/scryfallClient.js';
+import { downloadManager } from 'scryfall-mcp-server/dist/downloadManager.js';
+
+// Search for cards
+const cards = await scryfallClient.searchCards('lightning bolt');
+
+// Download card images
+const results = await downloadManager.downloadCardImages(['Lightning Bolt']);
+```
+
 ### Tool Signatures
 
-```python
-def mcp_search_cards(query: str) -> Dict[str, Any]
-def mcp_download_card(card_name: str, set_code: Optional[str] = None, 
-                     collector_number: Optional[str] = None, 
-                     force_download: bool = False) -> Dict[str, Any]
-def mcp_download_art_crop(card_name: str, set_code: Optional[str] = None,
-                         collector_number: Optional[str] = None,
-                         force_download: bool = False) -> Dict[str, Any]
-def mcp_get_card_artwork(card_id: str) -> Dict[str, Any]
-def mcp_verify_database() -> Dict[str, Any]
-def mcp_scan_directory(directory: str, update_db: bool = False) -> Dict[str, Any]
-def mcp_clean_database(execute: bool = False) -> Dict[str, Any]
-def mcp_database_report() -> Dict[str, Any]
+```typescript
+async function mcpSearchCards(query: string): Promise<SearchResult>
+async function mcpDownloadCard(
+  cardName: string, 
+  setCode?: string, 
+  collectorNumber?: string, 
+  forceDownload?: boolean
+): Promise<DownloadResult>
+async function mcpDownloadArtCrop(
+  cardName: string, 
+  setCode?: string,
+  collectorNumber?: string,
+  forceDownload?: boolean
+): Promise<DownloadResult>
+async function mcpGetCardArtwork(cardId: string): Promise<ArtworkResult>
+async function mcpVerifyDatabase(): Promise<DatabaseResult>
+async function mcpScanDirectory(directory: string, updateDb?: boolean): Promise<DatabaseResult>
+async function mcpCleanDatabase(execute?: boolean): Promise<DatabaseResult>
+async function mcpDatabaseReport(): Promise<DatabaseResult>
 ```
 
 ## Contributing

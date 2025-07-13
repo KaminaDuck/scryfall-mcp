@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "scryfall-server": {
-      "command": "python",
-      "args": ["-m", "scryfall_mcp"],
+      "command": "npx",
+      "args": ["scryfall-mcp-server"],
       "env": {
         "SCRYFALL_DATA_DIR": "/tmp/scryfall_downloads",
         "MCP_ENABLE_FILE_DOWNLOADS": "true"
