@@ -39,7 +39,10 @@ import {
 import {
   serveCardImage,
   serveArtCrop,
-  serveMetadata
+  serveMetadata,
+  serveCardImageFace,
+  serveArtCropFace,
+  serveMetadataFace
 } from './resources/fileResources.js';
 
 import { logger } from './logger.js';
@@ -169,7 +172,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'mcp_download_card',
-        description: 'Download a high-resolution image of a specific Magic: The Gathering card',
+        description: 'Download a high-resolution image of a specific Magic: The Gathering card. Supports transform cards (downloads all faces automatically)',
         inputSchema: {
           type: 'object',
           properties: {
@@ -196,7 +199,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'mcp_download_art_crop',
-        description: 'Download an art crop image of a specific Magic: The Gathering card',
+        description: 'Download an art crop image of a specific Magic: The Gathering card. Supports transform cards (downloads all faces automatically)',
         inputSchema: {
           type: 'object',
           properties: {
@@ -475,6 +478,24 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         name: 'Card Metadata',
         description: 'Access JSON metadata for downloaded cards',
         mimeType: 'application/json'
+      },
+      {
+        uri: 'resource://download/card/{file_id}/face/{face_index}',
+        name: 'Transform Card Face Image',
+        description: 'Access specific face of a transform card by file ID and face index',
+        mimeType: 'image/*'
+      },
+      {
+        uri: 'resource://download/art/{file_id}/face/{face_index}',
+        name: 'Transform Card Art Crop Face',
+        description: 'Access specific art crop face of a transform card by file ID and face index',
+        mimeType: 'image/*'
+      },
+      {
+        uri: 'resource://download/metadata/{file_id}/face/{face_index}',
+        name: 'Transform Card Face Metadata',
+        description: 'Access face-specific metadata for transform cards',
+        mimeType: 'application/json'
       }
     ]
   };
@@ -533,41 +554,101 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         ]
       };
     } else if (uri.startsWith('resource://download/card/')) {
-      const fileId = uri.replace('resource://download/card/', '');
-      const [content, mimeType] = await serveCardImage(fileId);
-      return {
-        contents: [
-          {
-            uri,
-            mimeType,
-            blob: content instanceof Buffer ? content : Buffer.from(content)
-          }
-        ]
-      };
+      // Check if this is a face-specific request
+      const cardPath = uri.replace('resource://download/card/', '');
+      if (cardPath.includes('/face/')) {
+        const [fileId, facePart] = cardPath.split('/face/');
+        const faceIndex = parseInt(facePart || '0', 10);
+        if (isNaN(faceIndex)) {
+          throw new Error(`Invalid face index: ${facePart}`);
+        }
+        const [content, mimeType] = await serveCardImageFace(fileId!, faceIndex);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              blob: content instanceof Buffer ? content : Buffer.from(content)
+            }
+          ]
+        };
+      } else {
+        // Standard card image request
+        const [content, mimeType] = await serveCardImage(cardPath);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              blob: content instanceof Buffer ? content : Buffer.from(content)
+            }
+          ]
+        };
+      }
     } else if (uri.startsWith('resource://download/art/')) {
-      const fileId = uri.replace('resource://download/art/', '');
-      const [content, mimeType] = await serveArtCrop(fileId);
-      return {
-        contents: [
-          {
-            uri,
-            mimeType,
-            blob: content instanceof Buffer ? content : Buffer.from(content)
-          }
-        ]
-      };
+      // Check if this is a face-specific request
+      const artPath = uri.replace('resource://download/art/', '');
+      if (artPath.includes('/face/')) {
+        const [fileId, facePart] = artPath.split('/face/');
+        const faceIndex = parseInt(facePart || '0', 10);
+        if (isNaN(faceIndex)) {
+          throw new Error(`Invalid face index: ${facePart}`);
+        }
+        const [content, mimeType] = await serveArtCropFace(fileId!, faceIndex);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              blob: content instanceof Buffer ? content : Buffer.from(content)
+            }
+          ]
+        };
+      } else {
+        // Standard art crop request
+        const [content, mimeType] = await serveArtCrop(artPath);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              blob: content instanceof Buffer ? content : Buffer.from(content)
+            }
+          ]
+        };
+      }
     } else if (uri.startsWith('resource://download/metadata/')) {
-      const fileId = uri.replace('resource://download/metadata/', '');
-      const [content, mimeType] = await serveMetadata(fileId);
-      return {
-        contents: [
-          {
-            uri,
-            mimeType,
-            text: content
-          }
-        ]
-      };
+      // Check if this is a face-specific request
+      const metadataPath = uri.replace('resource://download/metadata/', '');
+      if (metadataPath.includes('/face/')) {
+        const [fileId, facePart] = metadataPath.split('/face/');
+        const faceIndex = parseInt(facePart || '0', 10);
+        if (isNaN(faceIndex)) {
+          throw new Error(`Invalid face index: ${facePart}`);
+        }
+        const [content, mimeType] = await serveMetadataFace(fileId!, faceIndex);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              text: content
+            }
+          ]
+        };
+      } else {
+        // Standard metadata request
+        const [content, mimeType] = await serveMetadata(metadataPath);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              text: content
+            }
+          ]
+        };
+      }
     } else {
       throw new Error(`Unknown resource: ${uri}`);
     }

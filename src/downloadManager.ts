@@ -14,6 +14,10 @@ export interface DownloadResult {
   cardName: string;
   filePath: string;
   jsonPath?: string;
+  face_index?: number;
+  face_name?: string;
+  total_faces?: number;
+  is_transform_card?: boolean;
 }
 
 export interface DownloadSummary {
@@ -22,6 +26,13 @@ export interface DownloadSummary {
   skipped: number;
   errors: number;
   downloadedFiles: DownloadResult[];
+  totalImages?: number;
+}
+
+interface ImageUrlInfo {
+  url: string;
+  faceName: string;
+  faceIndex: number;
 }
 
 export class DownloadManager {
@@ -31,6 +42,38 @@ export class DownloadManager {
     if (!this.db) {
       this.db = await createCardDatabase();
     }
+  }
+
+  /**
+   * Extract image URLs from a card, handling both single-faced and multi-faced cards.
+   */
+  private extractImageUrls(card: Card, imageType: 'large' | 'art_crop'): ImageUrlInfo[] {
+    const results: ImageUrlInfo[] = [];
+
+    // Check for single-faced card first
+    if (card.image_uris?.[imageType]) {
+      results.push({
+        url: card.image_uris[imageType],
+        faceName: card.name,
+        faceIndex: 0
+      });
+      return results;
+    }
+
+    // Check for multi-faced card
+    if (card.card_faces && card.card_faces.length > 0) {
+      card.card_faces.forEach((face, index) => {
+        if (face.image_uris?.[imageType]) {
+          results.push({
+            url: face.image_uris[imageType],
+            faceName: face.name,
+            faceIndex: index
+          });
+        }
+      });
+    }
+
+    return results;
   }
 
   /**
@@ -53,7 +96,8 @@ export class DownloadManager {
       downloaded: 0,
       skipped: 0,
       errors: 0,
-      downloadedFiles: []
+      downloadedFiles: [],
+      totalImages: 0
     };
 
     logger.info(`Processing ${cardNames.length} cards for image download...`);
@@ -98,52 +142,95 @@ export class DownloadManager {
 
         logger.info(`[${index + 1}/${cardNames.length}] Fetching data for '${cardName}' from Scryfall...`);
 
-        const largeImageUrl = card.image_uris?.large;
+        const imageUrls = this.extractImageUrls(card, 'large');
 
-        if (largeImageUrl) {
-          let imageExtension = extname(largeImageUrl ?? '');
-          if (largeImageUrl.includes('?')) {
-            const urlBase = largeImageUrl.split('?')[0];
-            imageExtension = extname(urlBase ?? '');
+        if (imageUrls.length > 0) {
+          const isTransformCard = imageUrls.length > 1;
+          logger.info(`[${index + 1}/${cardNames.length}] Found ${imageUrls.length} image(s) for '${cardName}'${isTransformCard ? ' (transform card)' : ''}`);
+
+          let cardDownloaded = false;
+          for (const imageInfo of imageUrls) {
+            try {
+              let imageExtension = extname(imageInfo.url ?? '');
+              if (imageInfo.url.includes('?')) {
+                const urlBase = imageInfo.url.split('?')[0];
+                imageExtension = extname(urlBase ?? '');
+              }
+
+              // Generate filename based on whether it's a transform card
+              let imageFilename: string;
+              let faceCardVersionId: string;
+              
+              if (isTransformCard) {
+                const faceNameForFilename = imageInfo.faceName.replace(/\s/g, '_').replace(/\/\//g, '_');
+                if (setCode && collectorNumber) {
+                  imageFilename = `${cardNameForFilename}_face${imageInfo.faceIndex}_${faceNameForFilename}_${setCode}_${collectorNumber}${imageExtension}`;
+                  faceCardVersionId = `${cardName}_${setCode}_${collectorNumber}_face${imageInfo.faceIndex}`;
+                } else {
+                  imageFilename = `${cardNameForFilename}_face${imageInfo.faceIndex}_${faceNameForFilename}${imageExtension}`;
+                  faceCardVersionId = `${cardName}_face${imageInfo.faceIndex}`;
+                }
+              } else {
+                // Single-faced card - maintain existing pattern for backward compatibility
+                if (setCode && collectorNumber) {
+                  imageFilename = `${cardNameForFilename}_${setCode}_${collectorNumber}${imageExtension}`;
+                  faceCardVersionId = cardVersionId ?? cardName ?? 'unknown';
+                } else {
+                  imageFilename = `${cardNameForFilename}${imageExtension}`;
+                  faceCardVersionId = cardVersionId ?? cardName ?? 'unknown';
+                }
+              }
+
+              // Check if this specific face already exists
+              if (this.db!.cardExists(faceCardVersionId) && !forceDownload) {
+                logger.info(`Face ${imageInfo.faceIndex} (${imageInfo.faceName}) already exists, skipping...`);
+                continue;
+              }
+
+              const imageFilepath = join(outputFolder, imageFilename);
+
+              logger.info(`[${index + 1}/${cardNames.length}] Downloading face ${imageInfo.faceIndex} (${imageInfo.faceName})...`);
+              
+              const imageResponse = await fetch(imageInfo.url);
+              if (!imageResponse.ok) {
+                throw new Error(`HTTP ${imageResponse.status}: ${imageResponse.statusText}`);
+              }
+
+              const imageBuffer = await imageResponse.buffer();
+              await writeFile(imageFilepath, imageBuffer);
+              logger.info(`Saved to ${imageFilepath}`);
+
+              // Store face-specific database record
+              const faceCardName = isTransformCard ? `${cardName} (Face ${imageInfo.faceIndex}: ${imageInfo.faceName})` : cardName;
+              this.db!.addCard(
+                faceCardVersionId,
+                imageFilepath,
+                card.id,
+                card.set,
+                imageInfo.url
+              );
+
+              summary.totalImages!++;
+              summary.downloadedFiles.push({
+                cardName: faceCardName ?? 'unknown',
+                filePath: imageFilepath,
+                face_index: imageInfo.faceIndex,
+                face_name: imageInfo.faceName,
+                total_faces: imageUrls.length,
+                is_transform_card: isTransformCard
+              });
+              cardDownloaded = true;
+            } catch (faceError) {
+              logger.error(`[${index + 1}/${cardNames.length}] Error downloading face ${imageInfo.faceIndex} (${imageInfo.faceName}):`, faceError);
+              // Continue with other faces
+            }
           }
 
-          // Include set code and collector number in filename if available
-          let imageFilename: string;
-          if (setCode && collectorNumber) {
-            imageFilename = `${cardNameForFilename}_${setCode}_${collectorNumber}${imageExtension}`;
+          if (cardDownloaded) {
+            summary.downloaded++;
           } else {
-            imageFilename = `${cardNameForFilename}${imageExtension}`;
+            summary.errors++;
           }
-
-          const imageFilepath = join(outputFolder, imageFilename);
-
-          logger.info(`[${index + 1}/${cardNames.length}] Downloading large image for '${cardName}'...`);
-          
-          const imageResponse = await fetch(largeImageUrl);
-          if (!imageResponse.ok) {
-            throw new Error(`HTTP ${imageResponse.status}: ${imageResponse.statusText}`);
-          }
-
-          const imageBuffer = await imageResponse.buffer();
-          await writeFile(imageFilepath, imageBuffer);
-          logger.info(`Saved to ${imageFilepath}`);
-
-          // Add the card to the database with the version identifier
-          if (cardVersionId) {
-            this.db!.addCard(
-              cardVersionId,
-              imageFilepath,
-              card.id,
-              card.set,
-              largeImageUrl
-            );
-          }
-
-          summary.downloaded++;
-          summary.downloadedFiles.push({
-            cardName: cardName ?? 'unknown',
-            filePath: imageFilepath
-          });
         } else {
           logger.warn(`[${index + 1}/${cardNames.length}] No large image found for '${cardName}'.`);
           summary.errors++;
@@ -181,7 +268,8 @@ export class DownloadManager {
       downloaded: 0,
       skipped: 0,
       errors: 0,
-      downloadedFiles: []
+      downloadedFiles: [],
+      totalImages: 0
     };
 
     logger.info(`Processing ${cardNames.length} cards for art crop download...`);
@@ -224,9 +312,12 @@ export class DownloadManager {
 
         logger.info(`[${index + 1}/${cardNames.length}] Fetching data for '${cardName}' from Scryfall...`);
 
-        const artCropUrl = card.image_uris?.art_crop;
+        const imageUrls = this.extractImageUrls(card, 'art_crop');
 
-        if (artCropUrl) {
+        if (imageUrls.length > 0) {
+          const isTransformCard = imageUrls.length > 1;
+          logger.info(`[${index + 1}/${cardNames.length}] Found ${imageUrls.length} art crop(s) for '${cardName}'${isTransformCard ? ' (transform card)' : ''}`);
+
           // Create a folder for the set
           const setName = (card.set_name || 'unknown_set')
             .replace(/\s/g, '_')
@@ -234,58 +325,101 @@ export class DownloadManager {
           const setFolder = join(outputFolder, setName);
           await mkdir(setFolder, { recursive: true });
 
-          // Prepare the filename
           const cardNameForFilename = (cardName ?? 'unknown').replace(/\s/g, '_').replace(/\/\//g, '_');
-          let imageExtension = extname(artCropUrl ?? '');
-          if (artCropUrl.includes('?')) {
-            const urlBase = artCropUrl.split('?')[0];
-            imageExtension = extname(urlBase ?? '');
+
+          let cardDownloaded = false;
+          for (const imageInfo of imageUrls) {
+            try {
+              let imageExtension = extname(imageInfo.url ?? '');
+              if (imageInfo.url.includes('?')) {
+                const urlBase = imageInfo.url.split('?')[0];
+                imageExtension = extname(urlBase ?? '');
+              }
+
+              // Generate filename based on whether it's a transform card
+              let imageFilename: string;
+              let jsonFilename: string;
+              let faceCardVersionId: string;
+              
+              if (isTransformCard) {
+                const faceNameForFilename = imageInfo.faceName.replace(/\s/g, '_').replace(/\/\//g, '_');
+                if (setCode && collectorNumber) {
+                  imageFilename = `${cardNameForFilename}_face${imageInfo.faceIndex}_${faceNameForFilename}_${setCode}_${collectorNumber}${imageExtension}`;
+                  jsonFilename = `${cardNameForFilename}_face${imageInfo.faceIndex}_${faceNameForFilename}_${setCode}_${collectorNumber}.json`;
+                  faceCardVersionId = `${cardName}_${setCode}_${collectorNumber}_face${imageInfo.faceIndex}_art_crop`;
+                } else {
+                  imageFilename = `${cardNameForFilename}_face${imageInfo.faceIndex}_${faceNameForFilename}${imageExtension}`;
+                  jsonFilename = `${cardNameForFilename}_face${imageInfo.faceIndex}_${faceNameForFilename}.json`;
+                  faceCardVersionId = `${cardName}_face${imageInfo.faceIndex}_art_crop`;
+                }
+              } else {
+                // Single-faced card - maintain existing pattern for backward compatibility
+                if (setCode && collectorNumber) {
+                  imageFilename = `${cardNameForFilename}_${setCode}_${collectorNumber}${imageExtension}`;
+                  jsonFilename = `${cardNameForFilename}_${setCode}_${collectorNumber}.json`;
+                  faceCardVersionId = cardVersionId ?? `${cardName}_art_crop`;
+                } else {
+                  imageFilename = `${cardNameForFilename}${imageExtension}`;
+                  jsonFilename = `${cardNameForFilename}.json`;
+                  faceCardVersionId = cardVersionId ?? `${cardName}_art_crop`;
+                }
+              }
+
+              // Check if this specific face already exists
+              if (this.db!.cardExists(faceCardVersionId) && !forceDownload) {
+                logger.info(`Art crop face ${imageInfo.faceIndex} (${imageInfo.faceName}) already exists, skipping...`);
+                continue;
+              }
+
+              const imageFilepath = join(setFolder, imageFilename);
+              const jsonFilepath = join(setFolder, jsonFilename);
+
+              logger.info(`[${index + 1}/${cardNames.length}] Downloading art crop face ${imageInfo.faceIndex} (${imageInfo.faceName})...`);
+              
+              const imageResponse = await fetch(imageInfo.url);
+              if (!imageResponse.ok) {
+                throw new Error(`HTTP ${imageResponse.status}: ${imageResponse.statusText}`);
+              }
+
+              const imageBuffer = await imageResponse.buffer();
+              await writeFile(imageFilepath, imageBuffer);
+              logger.info(`Saved to ${imageFilepath}`);
+
+              // Store face-specific database record
+              const faceCardName = isTransformCard ? `${cardName} (Face ${imageInfo.faceIndex}: ${imageInfo.faceName})` : cardName;
+              this.db!.addCard(
+                faceCardVersionId,
+                imageFilepath,
+                card.id,
+                card.set,
+                imageInfo.url
+              );
+
+              // Save card data to JSON file with face-specific information
+              await writeFile(jsonFilepath, JSON.stringify(card, null, 4), 'utf-8');
+
+              summary.totalImages!++;
+              summary.downloadedFiles.push({
+                cardName: faceCardName ?? 'unknown',
+                filePath: imageFilepath,
+                jsonPath: jsonFilepath,
+                face_index: imageInfo.faceIndex,
+                face_name: imageInfo.faceName,
+                total_faces: imageUrls.length,
+                is_transform_card: isTransformCard
+              });
+              cardDownloaded = true;
+            } catch (faceError) {
+              logger.error(`[${index + 1}/${cardNames.length}] Error downloading art crop face ${imageInfo.faceIndex} (${imageInfo.faceName}):`, faceError);
+              // Continue with other faces
+            }
           }
 
-          // Include set code and collector number in filename if available
-          let imageFilename: string;
-          if (setCode && collectorNumber) {
-            imageFilename = `${cardNameForFilename}_${setCode}_${collectorNumber}${imageExtension}`;
+          if (cardDownloaded) {
+            summary.downloaded++;
           } else {
-            imageFilename = `${cardNameForFilename}${imageExtension}`;
+            summary.errors++;
           }
-
-          const imageFilepath = join(setFolder, imageFilename);
-
-          logger.info(`[${index + 1}/${cardNames.length}] Downloading art crop for '${cardName}'...`);
-          
-          const imageResponse = await fetch(artCropUrl);
-          if (!imageResponse.ok) {
-            throw new Error(`HTTP ${imageResponse.status}: ${imageResponse.statusText}`);
-          }
-
-          const imageBuffer = await imageResponse.buffer();
-          await writeFile(imageFilepath, imageBuffer);
-          logger.info(`Saved to ${imageFilepath}`);
-
-          // Add the card to the database with the version identifier
-          if (cardVersionId) {
-            this.db!.addCard(
-              cardVersionId,
-              imageFilepath,
-              card.id,
-              card.set,
-              artCropUrl
-            );
-          }
-
-          summary.downloaded++;
-
-          // Save card data to JSON file
-          const jsonFilename = `${cardNameForFilename}.json`;
-          const jsonFilepath = join(setFolder, jsonFilename);
-          await writeFile(jsonFilepath, JSON.stringify(card, null, 4), 'utf-8');
-
-          summary.downloadedFiles.push({
-            cardName: cardName ?? 'unknown',
-            filePath: imageFilepath,
-            jsonPath: jsonFilepath
-          });
         } else {
           logger.warn(`[${index + 1}/${cardNames.length}] No art crop found for '${cardName}'.`);
           summary.errors++;
@@ -310,6 +444,9 @@ export class DownloadManager {
     logger.info(`\n${operation} process complete!`);
     logger.info(`Total cards processed: ${summary.totalCards}`);
     logger.info(`Downloaded: ${summary.downloaded}`);
+    if (summary.totalImages !== undefined && summary.totalImages !== summary.downloaded) {
+      logger.info(`Total images downloaded: ${summary.totalImages}`);
+    }
     logger.info(`Skipped (already existed): ${summary.skipped}`);
     logger.info(`Errors encountered: ${summary.errors}`);
   }

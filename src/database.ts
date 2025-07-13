@@ -238,6 +238,9 @@ export class CardDatabase {
         logger.info("Missing file_ids resolved.");
       }
 
+      // Validate transform card consistency
+      // await this.validateTransformCardConsistency();
+
       logger.info("Database integrity check completed successfully.");
       
     } catch (error: any) {
@@ -282,10 +285,21 @@ export class CardDatabase {
   /**
    * Check if a card has already been downloaded.
    */
-  cardExists(cardName: string): boolean {
-    const stmt = this.db.prepare("SELECT 1 FROM downloaded_cards WHERE card_name = ?");
-    const result = stmt.get(cardName);
-    return result !== undefined;
+  cardExists(cardName: string): boolean;
+  cardExists(cardName: string, checkAllFaces: boolean): boolean;
+  cardExists(cardName: string, checkAllFaces: boolean = false): boolean {
+    if (checkAllFaces) {
+      // Check if any face of the card exists (for transform cards)
+      const baseName = this.extractBaseName(cardName);
+      const stmt = this.db.prepare("SELECT 1 FROM downloaded_cards WHERE card_name LIKE ? OR card_name = ?");
+      const result = stmt.get(`${baseName}%`, cardName);
+      return result !== undefined;
+    } else {
+      // Exact match (existing behavior)
+      const stmt = this.db.prepare("SELECT 1 FROM downloaded_cards WHERE card_name = ?");
+      const result = stmt.get(cardName);
+      return result !== undefined;
+    }
   }
 
   /**
@@ -318,6 +332,93 @@ export class CardDatabase {
   getCardInfo(cardName: string): CardRecord | undefined {
     const stmt = this.db.prepare("SELECT * FROM downloaded_cards WHERE card_name = ?");
     return stmt.get(cardName) as CardRecord | undefined;
+  }
+
+  /**
+   * Extract base card name from a potentially face-specific card name.
+   * For transform cards, removes the face suffix.
+   */
+  private extractBaseName(cardName: string): string {
+    // Remove face information like " (Face 0: Docent of Perfection)"
+    const facePattern = /\s+\(Face \d+: .+\)$/;
+    return cardName.replace(facePattern, '');
+  }
+
+  /**
+   * Get all faces of a card by its base name.
+   */
+  getCardsByBaseName(baseName: string): CardRecord[] {
+    const stmt = this.db.prepare("SELECT * FROM downloaded_cards WHERE card_name LIKE ? OR card_name = ? ORDER BY card_name");
+    return stmt.all(`${baseName} (Face %`, baseName) as CardRecord[];
+  }
+
+  /**
+   * Get all faces of a specific card version.
+   */
+  getTransformCardFaces(cardName: string, setCode?: string, collectorNumber?: string): CardRecord[] {
+    const baseName = this.extractBaseName(cardName);
+    let query = "SELECT * FROM downloaded_cards WHERE (card_name LIKE ? OR card_name = ?)";
+    const params: any[] = [`${baseName} (Face %`, baseName];
+    
+    if (setCode) {
+      query += " AND set_code = ?";
+      params.push(setCode);
+    }
+    
+    if (collectorNumber) {
+      query += " AND card_name LIKE ?";
+      params.push(`%_${collectorNumber}%`);
+    }
+    
+    query += " ORDER BY card_name";
+    
+    const stmt = this.db.prepare(query);
+    return stmt.all(...params) as CardRecord[];
+  }
+
+  /**
+   * Check if a card has multiple faces in the database.
+   */
+  isTransformCard(cardName: string): boolean {
+    const faces = this.getCardsByBaseName(this.extractBaseName(cardName));
+    return faces.length > 1;
+  }
+
+  /**
+   * Add a transform card face with specific face information.
+   */
+  addTransformCardFace(
+    baseName: string,
+    faceName: string,
+    faceIndex: number,
+    filename: string,
+    cardId?: string,
+    setCode?: string,
+    imageUrl?: string,
+    fileId?: string
+  ): string {
+    const finalFileId = fileId || uuidv4();
+    const faceCardName = `${baseName} (Face ${faceIndex}: ${faceName})`;
+
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO downloaded_cards 
+      (card_name, filename, card_id, set_code, image_url, file_id, download_date)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+
+    stmt.run(faceCardName, filename, cardId || null, setCode || null, imageUrl || null, finalFileId);
+    
+    return finalFileId;
+  }
+
+  /**
+   * Get information about a specific face of a card.
+   */
+  getCardFaceInfo(cardName: string, faceIndex: number): CardRecord | undefined {
+    const baseName = this.extractBaseName(cardName);
+    const stmt = this.db.prepare("SELECT * FROM downloaded_cards WHERE card_name LIKE ?");
+    const pattern = `${baseName} (Face ${faceIndex}:%`;
+    return stmt.get(pattern) as CardRecord | undefined;
   }
 
   /**
