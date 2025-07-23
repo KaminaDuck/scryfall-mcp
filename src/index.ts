@@ -97,12 +97,17 @@ function detectExecutionContext(): void {
   const isClaudeDesktop = process.env['CLAUDE_DESKTOP'] || 
                          process.cwd().includes('AnthropicClaude') ||
                          process.env['npm_execpath']?.includes('AnthropicClaude') ||
-                         process.env['npm_config_user_agent']?.includes('Claude');
+                         process.env['npm_config_user_agent']?.includes('Claude') ||
+                         // macOS-specific Claude Desktop indicators
+                         process.cwd().includes('com.anthropic.claude') ||
+                         process.env['HOME']?.includes('/Library/Application Support/Claude');
                          
   if (isClaudeDesktop) {
     logger.info('[Context] Claude Desktop execution detected');
     if (platform() === 'win32') {
       logger.warn('[Context] Windows + Claude Desktop detected - monitoring for environment variable issues');
+    } else if (platform() === 'darwin') {
+      logger.warn('[Context] macOS + Claude Desktop detected - may have file system restrictions');
     }
   }
   
@@ -134,17 +139,50 @@ function detectExecutionContext(): void {
       logger.error('[Context] This will likely cause path resolution failures');
     }
   }
+  
+  // Additional macOS diagnostics if running under Claude Desktop
+  if (isClaudeDesktop && platform() === 'darwin') {
+    logger.info('[Context] Performing additional macOS diagnostics...');
+    
+    // Check for sandboxing indicators
+    const sandboxIndicators = [
+      process.env['APP_SANDBOX_CONTAINER_ID'],
+      process.env['__CFBundleIdentifier'],
+      process.cwd().includes('/Library/Containers/'),
+      process.env['HOME']?.includes('/Library/Containers/')
+    ].filter(Boolean);
+    
+    if (sandboxIndicators.length > 0) {
+      logger.warn('[Context] App Sandbox restrictions detected - file access may be limited');
+      logger.warn('[Context] Consider setting SCRYFALL_DATA_DIR to an accessible location');
+    }
+    
+    // Check for SIP-protected paths
+    const protectedPaths = ['/System', '/usr', '/bin', '/sbin', '/var'];
+    const cwd = process.cwd();
+    if (protectedPaths.some(path => cwd.startsWith(path))) {
+      logger.warn('[Context] Working directory is in a SIP-protected location');
+    }
+  }
 }
 
 async function main(): Promise<void> {
+  let serverInitialized = false;
+  let transportConnected = false;
+  
   try {
     logger.info('[Setup] Starting Scryfall MCP server...');
     
     // Validate environment and detect issues early
-    validateEnvironmentVariables();
-    detectExecutionContext();
+    try {
+      validateEnvironmentVariables();
+      detectExecutionContext();
+    } catch (envError) {
+      logger.warn('[Setup] Environment validation warnings:', envError);
+      // Continue despite environment warnings
+    }
     
-    // Windows-specific initialization checks
+    // Platform-specific initialization checks
     if (platform() === 'win32') {
       logger.info('[Setup] Performing Windows-specific initialization checks...');
       
@@ -155,52 +193,93 @@ async function main(): Promise<void> {
       } catch (pathError) {
         logger.error('[Setup] Windows path resolution issue detected:', pathError);
       }
+    } else if (platform() === 'darwin') {
+      logger.info('[Setup] Performing macOS-specific initialization checks...');
+      
+      // Check for common macOS path issues
+      try {
+        const homePath = process.env['HOME'] || '/tmp';
+        logger.info(`[Setup] macOS home path: ${homePath}`);
+        
+        // Check if we're in a sandboxed environment
+        if (homePath.includes('/Library/Containers/')) {
+          logger.warn('[Setup] Sandboxed environment detected - file access may be restricted');
+        }
+      } catch (pathError) {
+        logger.error('[Setup] macOS path resolution issue detected:', pathError);
+      }
     }
     
     // Initialize server before transport connection to prevent initialization failures
     // from causing transport disconnection
-    logger.info('[Setup] Initializing server...');
+    logger.info('[Setup] Initializing server components...');
     try {
       await initializeServer();
+      serverInitialized = true;
       logger.info('[Setup] Server initialization completed successfully');
-    } catch (initError) {
-      logger.warn('[Setup] Server initialization encountered issues, continuing with limited functionality:', initError);
-      // Continue with transport connection even if initialization has issues
-      // The server can still provide basic functionality without full initialization
+    } catch (initError: any) {
+      logger.warn('[Setup] Server initialization encountered issues:', initError.message);
+      
+      // Determine if we can continue without full initialization
+      const criticalErrors = ['MODULE_NOT_FOUND', 'ERR_INVALID_ARG_TYPE', 'EACCES'];
+      if (initError.code && criticalErrors.includes(initError.code)) {
+        logger.error('[Setup] Critical initialization error - cannot continue');
+        throw initError;
+      }
+      
+      logger.info('[Setup] Continuing with limited functionality (API-only mode)');
+      // Server can still provide basic functionality without full initialization
     }
     
     // Create stdio transport for MCP communication
+    logger.info('[Setup] Creating MCP transport...');
     const transport = new StdioServerTransport();
     
-    // Connect the server to the transport
-    await server.connect(transport);
-    
-    logger.info('[Setup] Scryfall MCP server is running and ready for requests');
+    // Connect the server to the transport with error handling
+    logger.info('[Setup] Connecting to MCP transport...');
+    try {
+      await server.connect(transport);
+      transportConnected = true;
+      logger.info('[Setup] ✓ Scryfall MCP server is running and ready for requests');
+    } catch (transportError) {
+      logger.error('[Setup] Failed to connect to MCP transport:', transportError);
+      throw transportError;
+    }
     
     // Handle process termination gracefully
     process.on('SIGINT', async () => {
       logger.info('[Setup] Received SIGINT, shutting down gracefully...');
-      await server.close();
+      try {
+        await server.close();
+      } catch (closeError) {
+        logger.error('[Setup] Error during graceful shutdown:', closeError);
+      }
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
       logger.info('[Setup] Received SIGTERM, shutting down gracefully...');
-      await server.close();
+      try {
+        await server.close();
+      } catch (closeError) {
+        logger.error('[Setup] Error during graceful shutdown:', closeError);
+      }
       process.exit(0);
     });
     
   } catch (error) {
     logger.error('[Setup] Failed to start Scryfall MCP server:', error);
     
-    // Enhanced error details with Windows-specific diagnostics
+    // Enhanced error details with platform-specific diagnostics
     const errorDetails: any = {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : 'Unknown',
       platform: platform(),
       nodeVersion: process.version,
-      workingDirectory: process.cwd()
+      workingDirectory: process.cwd(),
+      serverInitialized,
+      transportConnected
     };
     
     // Add Windows-specific error information
@@ -216,6 +295,7 @@ async function main(): Promise<void> {
       if (errorMessage.includes('ENOENT')) {
         logger.error('[Setup] ENOENT error detected - this is likely a path resolution issue on Windows');
         logger.error('[Setup] Check if environment variables like ${APPDATA} are being resolved properly');
+        logger.error('[Setup] Try: npm install -g @kaminaduck/scryfall-mcp-server');
       }
       
       if (errorMessage.includes('EACCES')) {
@@ -224,7 +304,44 @@ async function main(): Promise<void> {
       }
     }
     
+    // Add macOS-specific error information
+    if (platform() === 'darwin') {
+      errorDetails.macOSEnvironment = {
+        HOME: process.env['HOME'] || 'NOT_SET',
+        USER: process.env['USER'] || 'NOT_SET',
+        TMPDIR: process.env['TMPDIR'] || 'NOT_SET',
+        XDG_CACHE_HOME: process.env['XDG_CACHE_HOME'] || 'NOT_SET'
+      };
+      
+      // Check for common macOS error patterns
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('ENOENT')) {
+        logger.error('[Setup] ENOENT error detected - this is likely a path access issue on macOS');
+        logger.error('[Setup] Claude Desktop may have restricted file system access');
+        logger.error('[Setup] Try setting: export SCRYFALL_DATA_DIR="$HOME/Documents/scryfall_mcp"');
+      }
+      
+      if (errorMessage.includes('EACCES')) {
+        logger.error('[Setup] EACCES error detected - this is likely a permissions issue on macOS');
+        logger.error('[Setup] This may be due to App Sandbox or SIP restrictions');
+        logger.error('[Setup] Try using a user-writable directory like ~/Documents or /tmp');
+      }
+      
+      if (errorMessage.includes('EROFS')) {
+        logger.error('[Setup] EROFS error detected - attempting to write to a read-only file system');
+        logger.error('[Setup] Set SCRYFALL_DATA_DIR to a writable location');
+      }
+    }
+    
     logger.error('[Setup] Error details:', errorDetails);
+    
+    // Provide helpful next steps
+    logger.error('[Setup] === TROUBLESHOOTING STEPS ===');
+    logger.error('[Setup] 1. Check the error message above for specific issues');
+    logger.error('[Setup] 2. Try setting SCRYFALL_DATA_DIR environment variable to a writable directory');
+    logger.error('[Setup] 3. For persistent issues, see the README.md troubleshooting section');
+    logger.error('[Setup] 4. Report issues at: https://github.com/KaminaDuck/scryfall-mcp/issues');
+    
     process.exit(1);
   }
 }
@@ -233,13 +350,39 @@ async function main(): Promise<void> {
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('[Global] Unhandled promise rejection:', reason);
   logger.error('[Global] Promise that was rejected:', promise);
-  process.exit(1);
+  
+  // Provide platform-specific guidance for common rejection causes
+  if (reason && typeof reason === 'object' && 'code' in reason) {
+    const errorCode = (reason as any).code;
+    if (errorCode === 'ENOENT' && platform() === 'darwin') {
+      logger.error('[Global] File/directory not found - possible macOS permission issue');
+      logger.error('[Global] Try setting SCRYFALL_DATA_DIR to an accessible location');
+    } else if (errorCode === 'EACCES') {
+      logger.error('[Global] Permission denied - check file system permissions');
+    }
+  }
+  
+  // Give the logger time to flush before exiting
+  setTimeout(() => process.exit(1), 100);
 });
 
 process.on('uncaughtException', (error) => {
   logger.error('[Global] Uncaught exception:', error);
   logger.error('[Global] Error stack:', error.stack);
-  process.exit(1);
+  
+  // Provide helpful context for common exceptions
+  if (error.message.includes('Transport closed unexpectedly')) {
+    logger.error('[Global] MCP transport closed - this often indicates an initialization failure');
+    logger.error('[Global] Check the logs above for storage directory or permission errors');
+  } else if (error.code === 'ENOENT') {
+    logger.error('[Global] File or directory not found during operation');
+    if (platform() === 'darwin') {
+      logger.error('[Global] On macOS, this may be due to sandbox restrictions');
+    }
+  }
+  
+  // Give the logger time to flush before exiting
+  setTimeout(() => process.exit(1), 100);
 });
 
 // Only run if this file is executed directly (reliable check for npx execution)

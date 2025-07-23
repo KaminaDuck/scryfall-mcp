@@ -61,115 +61,202 @@ export const server = new Server({
 // Track whether file operations are available (used for graceful degradation)
 let fileOperationsAvailable = false;
 
+// Export the file operations status for use in other modules
+export function isFileOperationsAvailable(): boolean {
+  return fileOperationsAvailable;
+}
+
 // Initialize the server with resilient error handling and graceful degradation
 export async function initializeServer() {
   logger.info('[Setup] Initializing Scryfall MCP server...');
   
-  // Enhanced pre-startup checks with graceful degradation
-  if (isMcpMode()) {
-    logger.info('[Setup] Running in MCP mode - performing storage validation');
+  try {
+    // Log initialization start with detailed environment info
+    logger.info('[Setup] Environment details:', {
+      platform: process.platform,
+      nodeVersion: process.version,
+      cwd: process.cwd(),
+      mcp_mode: isMcpMode()
+    });
     
-    // Validate storage directory with graceful degradation
-    let storageDir: string | null = null;
-    try {
-      storageDir = await getStorageDirectory();
-      logger.info(`[Setup] Storage directory resolved: ${storageDir}`);
-    } catch (storageError: any) {
-      logger.warn(`[Setup] Failed to resolve storage directory: ${storageError.message}`);
-      logger.warn('[Setup] File download functionality will be disabled');
-      fileOperationsAvailable = false;
-    }
-    
-    // Verify directory permissions with graceful fallback
-    if (storageDir) {
+    // Enhanced pre-startup checks with graceful degradation
+    if (isMcpMode()) {
+      logger.info('[Setup] Running in MCP mode - performing storage validation');
+      
+      // Validate storage directory with graceful degradation
+      let storageDir: string | null = null;
       try {
-        const hasPermissions = await ensureDirectoryPermissions(storageDir);
-        if (!hasPermissions) {
-          logger.warn(`[Setup] Cannot write to storage directory: ${storageDir}`);
+        storageDir = await getStorageDirectory();
+        logger.info(`[Setup] Storage directory resolved: ${storageDir}`);
+      } catch (storageError: any) {
+        logger.warn(`[Setup] Failed to resolve storage directory: ${storageError.message}`);
+        logger.warn('[Setup] Storage error details:', {
+          error: storageError.message,
+          code: storageError.code,
+          path: storageError.path
+        });
+        logger.warn('[Setup] File download functionality will be disabled');
+        fileOperationsAvailable = false;
+      }
+      
+      // Verify directory permissions with graceful fallback
+      if (storageDir) {
+        try {
+          logger.info('[Setup] Checking storage directory permissions...');
+          const hasPermissions = await ensureDirectoryPermissions(storageDir);
+          if (!hasPermissions) {
+            logger.warn(`[Setup] Cannot write to storage directory: ${storageDir}`);
+            logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
+            fileOperationsAvailable = false;
+          } else {
+            logger.info(`[Setup] Storage directory permissions verified: ${storageDir}`);
+            fileOperationsAvailable = true;
+          }
+        } catch (permissionError: any) {
+          logger.warn(`[Setup] Storage directory permission check failed: ${permissionError.message}`);
+          logger.warn('[Setup] Permission error details:', {
+            error: permissionError.message,
+            code: permissionError.code,
+            syscall: permissionError.syscall,
+            path: permissionError.path
+          });
           logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
           fileOperationsAvailable = false;
-        } else {
-          logger.info(`[Setup] Storage directory permissions verified: ${storageDir}`);
-          fileOperationsAvailable = true;
         }
-      } catch (permissionError: any) {
-        logger.warn(`[Setup] Storage directory permission check failed: ${permissionError.message}`);
-        logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
-        fileOperationsAvailable = false;
       }
-    }
-    
-    // Verify required subdirectories can be created (only if file operations are available)
-    if (fileOperationsAvailable && storageDir) {
+      
+      // Verify required subdirectories can be created (only if file operations are available)
+      if (fileOperationsAvailable && storageDir) {
+        try {
+          logger.info('[Setup] Verifying subdirectory creation...');
+          const cardImagesDir = await getStorageDirectory('scryfall_card_images');
+          const artCropsDir = await getStorageDirectory('scryfall_images');
+          logger.info(`[Setup] Subdirectories verified: card images (${cardImagesDir}), art crops (${artCropsDir})`);
+        } catch (subdirError: any) {
+          logger.warn(`[Setup] Failed to create required subdirectories: ${subdirError.message}`);
+          logger.warn('[Setup] Subdirectory error details:', {
+            error: subdirError.message,
+            code: subdirError.code,
+            path: subdirError.path
+          });
+          logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
+          fileOperationsAvailable = false;
+        }
+      }
+      
+      // Log the final status of file operations
+      if (fileOperationsAvailable) {
+        logger.info('[Setup] ✓ File download functionality is available');
+      } else {
+        logger.info('[Setup] ⚠ File download functionality is disabled - server will provide search and API access only');
+      }
+    } else {
+      logger.info('[Setup] Running in standalone mode');
       try {
-        const cardImagesDir = await getStorageDirectory('scryfall_card_images');
-        const artCropsDir = await getStorageDirectory('scryfall_images');
-        logger.info(`[Setup] Subdirectories verified: card images (${cardImagesDir}), art crops (${artCropsDir})`);
-      } catch (subdirError: any) {
-        logger.warn(`[Setup] Failed to create required subdirectories: ${subdirError.message}`);
-        logger.warn('[Setup] File downloads will be disabled - server will continue with API-only functionality');
+        // Even in standalone mode, verify storage is accessible
+        const testDir = await getStorageDirectory();
+        await ensureDirectoryPermissions(testDir);
+        fileOperationsAvailable = true;
+        logger.info('[Setup] ✓ Standalone mode storage verified');
+      } catch (standaloneError: any) {
+        logger.warn('[Setup] Standalone mode storage verification failed:', standaloneError.message);
         fileOperationsAvailable = false;
       }
     }
     
-    // Log the final status of file operations
-    if (fileOperationsAvailable) {
-      logger.info('[Setup] ✓ File download functionality is available');
-    } else {
-      logger.info('[Setup] ⚠ File download functionality is disabled - server will provide search and API access only');
-    }
-  } else {
-    logger.info('[Setup] Running in standalone mode');
-    fileOperationsAvailable = true; // Assume file operations work in standalone mode
-  }
-  
-  // Additional system checks
-  try {
-    // Verify Node.js version compatibility
-    const nodeVersion = process.version;
-    const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0] || '0');
-    if (majorVersion < 18) {
-      logger.warn(`[Setup] Warning: Node.js version ${nodeVersion} detected. Version 18+ is recommended.`);
-    } else {
-      logger.info(`[Setup] Node.js version ${nodeVersion} is compatible`);
-    }
-    
-    // Verify required environment variables if in MCP mode
-    if (isMcpMode()) {
-      const requiredEnvVars = ['MCP_SERVER_NAME', 'MCP_ENABLE_FILE_DOWNLOADS'];
-      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-      if (missingVars.length > 0) {
-        logger.info(`[Setup] Optional environment variables not set: ${missingVars.join(', ')}`);
+    // Additional system checks
+    try {
+      // Verify Node.js version compatibility
+      const nodeVersion = process.version;
+      const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0] || '0');
+      if (majorVersion < 18) {
+        logger.warn(`[Setup] Warning: Node.js version ${nodeVersion} detected. Version 18+ is recommended.`);
+      } else {
+        logger.info(`[Setup] Node.js version ${nodeVersion} is compatible`);
       }
+      
+      // Verify required environment variables if in MCP mode
+      if (isMcpMode()) {
+        const requiredEnvVars = ['MCP_SERVER_NAME', 'MCP_ENABLE_FILE_DOWNLOADS'];
+        const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+        if (missingVars.length > 0) {
+          logger.info(`[Setup] Optional environment variables not set: ${missingVars.join(', ')}`);
+        }
+      }
+      
+      // Log memory usage for diagnostics
+      const memUsage = process.memoryUsage();
+      logger.info('[Setup] Memory usage:', {
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`
+      });
+      
+    } catch (systemCheckError: any) {
+      logger.warn(`[Setup] System check warnings: ${systemCheckError.message}`);
+      // Don't fail initialization for system check warnings
     }
     
-  } catch (systemCheckError: any) {
-    logger.warn(`[Setup] System check warnings: ${systemCheckError.message}`);
-    // Don't fail initialization for system check warnings
+    logger.info('[Setup] ✓ Scryfall MCP server initialized successfully');
+    logger.info('[Setup] ✓ Ready to handle MCP requests');
+    
+  } catch (criticalError: any) {
+    // Catch any unexpected errors during initialization
+    logger.error('[Setup] CRITICAL: Unexpected error during server initialization:', criticalError);
+    logger.error('[Setup] Critical error details:', {
+      message: criticalError.message,
+      stack: criticalError.stack,
+      code: criticalError.code
+    });
+    
+    // Try to continue with minimal functionality
+    fileOperationsAvailable = false;
+    logger.warn('[Setup] Attempting to continue with minimal functionality (API-only mode)');
+    
+    // Re-throw only if we can't recover at all
+    if (criticalError.code === 'MODULE_NOT_FOUND' || criticalError.code === 'ERR_INVALID_ARG_TYPE') {
+      throw criticalError;
+    }
   }
-  
-  logger.info('[Setup] ✓ Scryfall MCP server initialized successfully');
-  logger.info('[Setup] ✓ Ready to handle MCP requests');
 }
 
 // Register tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: 'mcp_search_cards',
-        description: 'Search for Magic: The Gathering cards using the Scryfall API',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'The search query to use (e.g., "lightning bolt", "t:creature c:red")'
-            }
-          },
-          required: ['query']
-        }
-      },
+  // Always available tools (API-based)
+  const tools = [
+    {
+      name: 'mcp_search_cards',
+      description: 'Search for Magic: The Gathering cards using the Scryfall API',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query to use (e.g., "lightning bolt", "t:creature c:red")'
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'mcp_get_card_artwork',
+      description: 'Get the artwork for a specific Magic: The Gathering card',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          card_id: {
+            type: 'string',
+            description: 'The Scryfall ID of the card'
+          }
+        },
+        required: ['card_id']
+      }
+    }
+  ];
+
+  // File operation dependent tools
+  if (fileOperationsAvailable) {
+    tools.push(
       {
         name: 'mcp_download_card',
         description: 'Download a high-resolution image of a specific Magic: The Gathering card. Supports transform cards (downloads all faces automatically)',
@@ -225,20 +312,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: 'mcp_get_card_artwork',
-        description: 'Get the artwork for a specific Magic: The Gathering card',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            card_id: {
-              type: 'string',
-              description: 'The Scryfall ID of the card'
-            }
-          },
-          required: ['card_id']
-        }
-      },
-      {
         name: 'mcp_verify_database',
         description: 'Verify database integrity by checking if all referenced files exist',
         inputSchema: {
@@ -290,8 +363,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false
         }
       }
-    ]
-  };
+    );
+  }
+
+  return { tools };
 });
 
 // Handle tool calls
@@ -301,6 +376,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     if (!args) {
       throw new Error('Arguments are required but not provided');
+    }
+
+    // Check if the requested tool requires file operations
+    const fileOperationTools = [
+      'mcp_download_card',
+      'mcp_download_art_crop',
+      'mcp_verify_database',
+      'mcp_scan_directory',
+      'mcp_clean_database',
+      'mcp_database_report'
+    ];
+
+    if (fileOperationTools.includes(name) && !fileOperationsAvailable) {
+      logger.warn(`[Tool] Tool ${name} requested but file operations are not available`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              status: 'error',
+              message: 'File operations are not available. This tool requires write access to the storage directory.',
+              details: 'The server is running in API-only mode. You can still search for cards and get card information.',
+              tool: name
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
     }
 
     switch (name) {

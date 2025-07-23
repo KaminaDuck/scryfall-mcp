@@ -755,6 +755,89 @@ If you're experiencing `${APPDATA}` expansion errors:
 1. Install globally: `npm install -g @kaminaduck/scryfall-mcp-server`
 2. Use global command in Claude Desktop config: `"command": "scryfall-mcp-server"`
 
+#### macOS-Specific Issues
+
+**"Server transport closed unexpectedly" on macOS**
+
+If you see this error on macOS, it's typically due to file system permission restrictions. Claude Desktop on macOS runs with App Sandbox restrictions that may limit file access.
+
+**Common Causes:**
+1. App Sandbox restrictions preventing directory creation
+2. System Integrity Protection (SIP) blocking access to system directories
+3. Standard Unix file permissions issues
+
+**Solutions:**
+
+**Solution 1: Set Custom Storage Directory (Recommended)**
+```json
+{
+  "mcpServers": {
+    "scryfall-server": {
+      "command": "scryfall-mcp-server",
+      "env": {
+        "MCP_SERVER_NAME": "scryfall-server",
+        "MCP_ENABLE_FILE_DOWNLOADS": "true",
+        "SCRYFALL_DATA_DIR": "$HOME/Documents/scryfall_mcp"
+      }
+    }
+  }
+}
+```
+
+**Solution 2: Use Temporary Directory**
+```json
+{
+  "mcpServers": {
+    "scryfall-server": {
+      "command": "scryfall-mcp-server",
+      "env": {
+        "MCP_SERVER_NAME": "scryfall-server",
+        "MCP_ENABLE_FILE_DOWNLOADS": "true",
+        "SCRYFALL_DATA_DIR": "/tmp/scryfall_mcp"
+      }
+    }
+  }
+}
+```
+
+**Solution 3: Grant Claude Desktop File Access**
+1. Open System Settings > Privacy & Security > Files and Folders
+2. Find Claude or Claude Desktop in the list
+3. Grant access to the folders you want to use for storage
+
+**macOS Permission Troubleshooting:**
+
+1. **Check if running in sandboxed environment**:
+   ```bash
+   echo $HOME
+   # If it shows /Library/Containers/..., you're sandboxed
+   ```
+
+2. **Create and test a writable directory**:
+   ```bash
+   mkdir -p ~/Documents/scryfall_mcp
+   chmod 755 ~/Documents/scryfall_mcp
+   touch ~/Documents/scryfall_mcp/test && rm ~/Documents/scryfall_mcp/test
+   # Should succeed without errors
+   ```
+
+3. **Alternative storage locations for macOS**:
+   - `~/Documents/scryfall_mcp` - Usually accessible
+   - `~/Library/Caches/scryfall_mcp` - Good for temporary data
+   - `/tmp/scryfall_mcp` - Always writable but cleared on restart
+   - `~/Desktop/scryfall_mcp` - If other locations fail
+
+**Common macOS Error Codes:**
+- **EACCES**: Permission denied - try a different directory
+- **ENOENT**: Directory doesn't exist - ensure parent directory exists
+- **EROFS**: Read-only file system - you're trying to write to a protected location
+- **EPERM**: Operation not permitted - usually due to SIP or sandbox restrictions
+
+**Quick macOS Fix:**
+If you're experiencing file access issues:
+1. Set `SCRYFALL_DATA_DIR` to a user-writable location: `"SCRYFALL_DATA_DIR": "$HOME/Documents/scryfall_mcp"`
+2. Or disable file operations: `"MCP_ENABLE_FILE_DOWNLOADS": "false"` (API-only mode)
+
 ### Testing Your Configuration
 
 Before adding the server to Claude Desktop, test it manually:

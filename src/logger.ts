@@ -184,6 +184,9 @@ class Logger {
     
     if (platform() === 'win32') {
       relevantVars.push('APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'TEMP', 'TMP');
+    } else if (platform() === 'darwin') {
+      relevantVars.push('HOME', 'USER', 'TMPDIR', 'XDG_CACHE_HOME', 'XDG_CONFIG_HOME', 
+                       'XDG_DATA_HOME', '__CFBundleIdentifier', 'APP_SANDBOX_CONTAINER_ID');
     } else {
       relevantVars.push('HOME', 'XDG_CACHE_HOME', 'TMPDIR');
     }
@@ -313,6 +316,142 @@ class Logger {
         if (error.path.includes('${')) {
           this.error(`${prefix} ❌ Path contains unresolved environment variables!`);
         }
+      }
+    }
+  }
+
+  /**
+   * Log macOS-specific path information to help diagnose path-related issues.
+   */
+  logMacOSPathInfo(): void {
+    if (platform() !== 'darwin') {
+      this.debug('[macOSPath] Not running on macOS, skipping macOS path diagnostics');
+      return;
+    }
+
+    this.info('[macOSPath] === macOS Path Diagnostics ===');
+    
+    // Check critical macOS paths
+    const macOSPaths = {
+      'HOME': process.env['HOME'],
+      'USER': process.env['USER'],
+      'TMPDIR': process.env['TMPDIR'],
+      'XDG_CACHE_HOME': process.env['XDG_CACHE_HOME'],
+      'XDG_CONFIG_HOME': process.env['XDG_CONFIG_HOME'],
+      'XDG_DATA_HOME': process.env['XDG_DATA_HOME'],
+      'PATH': process.env['PATH']
+    };
+
+    for (const [name, path] of Object.entries(macOSPaths)) {
+      if (path) {
+        this.info(`[macOSPath] ✅ ${name}: ${path}`);
+        
+        // Check for sandboxed paths
+        if (name === 'HOME' && path.includes('/Library/Containers/')) {
+          this.warn(`[macOSPath] ⚠️  Sandboxed HOME detected: ${path}`);
+          this.warn('[macOSPath] App is running in a sandbox - file access will be restricted');
+        }
+      } else {
+        this.warn(`[macOSPath] ⚠️  ${name}: <not set>`);
+      }
+    }
+
+    // Check common macOS directories
+    const commonDirs = [
+      join(process.env['HOME'] || '', 'Library', 'Application Support'),
+      join(process.env['HOME'] || '', 'Library', 'Caches'),
+      '/tmp',
+      '/private/tmp',
+      '/var/folders'
+    ];
+
+    this.info('[macOSPath] Common directory accessibility:');
+    for (const dir of commonDirs) {
+      if (dir.startsWith('/System') || dir.startsWith('/usr') && !dir.startsWith('/usr/local')) {
+        this.warn(`[macOSPath] ⚠️  ${dir} - SIP protected`);
+      } else {
+        this.info(`[macOSPath] ${dir}`);
+      }
+    }
+
+    // Check current working directory
+    const cwd = process.cwd();
+    this.info(`[macOSPath] Current working directory: ${cwd}`);
+    
+    // Check for common macOS path issues
+    if (cwd.includes('/Library/Containers/')) {
+      this.warn('[macOSPath] ⚠️  Working in sandboxed container directory');
+    }
+    
+    if (cwd.startsWith('/System') || cwd.startsWith('/usr') && !cwd.startsWith('/usr/local')) {
+      this.warn('[macOSPath] ⚠️  Working in SIP-protected directory');
+    }
+
+    // Check for Claude Desktop specific paths
+    if (cwd.includes('com.anthropic.claude')) {
+      this.info('[macOSPath] Claude Desktop application directory detected');
+    }
+
+    this.info('[macOSPath] === End macOS Path Diagnostics ===');
+  }
+
+  /**
+   * Enhanced error logging with macOS-specific error codes and path information.
+   */
+  logMacOSError(message: string, error: any, context?: string): void {
+    const prefix = context ? `[${context}]` : '[macOSError]';
+    
+    this.error(`${prefix} ${message}`, error);
+    
+    if (platform() === 'darwin' && error) {
+      const errorCode = error.code || error.errno;
+      const errorMessage = error.message || String(error);
+      
+      this.error(`${prefix} Error code: ${errorCode}`);
+      
+      // Provide macOS-specific error explanations
+      if (errorCode === 'ENOENT') {
+        this.error(`${prefix} ENOENT: File or directory not found`);
+        this.error(`${prefix} This may indicate sandbox restrictions or permission issues`);
+        this.error(`${prefix} Try setting SCRYFALL_DATA_DIR to an accessible location`);
+      } else if (errorCode === 'EACCES') {
+        this.error(`${prefix} EACCES: Permission denied`);
+        this.error(`${prefix} Common causes on macOS:`);
+        this.error(`${prefix} - App Sandbox restrictions`);
+        this.error(`${prefix} - System Integrity Protection (SIP)`);
+        this.error(`${prefix} - Standard UNIX permissions`);
+        this.error(`${prefix} Solutions:`);
+        this.error(`${prefix} - Use SCRYFALL_DATA_DIR to specify a writable directory`);
+        this.error(`${prefix} - Grant file access in System Settings > Privacy & Security`);
+      } else if (errorCode === 'EPERM') {
+        this.error(`${prefix} EPERM: Operation not permitted`);
+        this.error(`${prefix} This usually indicates macOS security restrictions`);
+      } else if (errorCode === 'EROFS') {
+        this.error(`${prefix} EROFS: Read-only file system`);
+        this.error(`${prefix} Cannot write to this location - use a different directory`);
+      } else if (errorCode === 'ENOTDIR') {
+        this.error(`${prefix} ENOTDIR: Not a directory`);
+        this.error(`${prefix} The specified path exists but is not a directory`);
+      }
+      
+      // Log path if available
+      if (error.path) {
+        this.error(`${prefix} Problematic path: ${error.path}`);
+        
+        // Check for common problematic paths
+        if (error.path.startsWith('/System') || error.path.startsWith('/usr')) {
+          this.error(`${prefix} ❌ Path is in a system-protected location!`);
+        }
+        if (error.path.includes('/Library/Containers/')) {
+          this.error(`${prefix} ❌ Path indicates app sandboxing issues!`);
+        }
+      }
+      
+      // Provide specific guidance based on error context
+      if (error.syscall === 'mkdir') {
+        this.error(`${prefix} Failed to create directory - check parent directory permissions`);
+      } else if (error.syscall === 'open') {
+        this.error(`${prefix} Failed to open file - check file permissions and parent directory`);
       }
     }
   }
