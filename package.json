@@ -1,6 +1,6 @@
 {
   "name": "@kaminaduck/scryfall-mcp-server",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A Model Context Protocol (MCP) server that provides access to the Scryfall API for Magic: The Gathering card data",
   "type": "module",
   "main": "dist/index.js",
